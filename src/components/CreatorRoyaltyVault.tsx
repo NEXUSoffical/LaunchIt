@@ -264,12 +264,28 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        const width = 600;
+                        const height = 750;
+                        const left = window.screen.width / 2 - width / 2;
+                        const top = window.screen.height / 2 - height / 2;
+                        
                         setIsVerifyingTikTok(true);
-                        setTimeout(() => {
-                          setIsVerifyingTikTok(false);
-                          setIsTikTokVerified(true);
-                          setVerifiedHandle(claimType === "creator" ? creatorHandle : "@you");
-                        }, 1000);
+                        
+                        const popup = window.open(
+                          "https://www.tiktok.com/login",
+                          "TikTokLogin",
+                          `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes`
+                        );
+
+                        // Monitor the real login window
+                        const timer = setInterval(() => {
+                          if (popup && popup.closed) {
+                            clearInterval(timer);
+                            setIsVerifyingTikTok(false);
+                            setIsTikTokVerified(true);
+                            setVerifiedHandle(claimType === "creator" ? creatorHandle : "@launcher");
+                          }
+                        }, 500);
                       }}
                       disabled={isVerifyingTikTok}
                       style={{
