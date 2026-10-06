@@ -187,7 +187,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
             <span>Launch without leaving TikTok, IG, or X:</span>
           </div>
           <p style={{ lineHeight: "1.4" }}>
-            Just comment <b style={{ color: "#ffffff" }}>@LaunchIt $TICKER</b> under any video! Our bot auto-scrapes the video, mints the coin on Solana, and replies with the link in seconds! 🐆
+            Just comment <b style={{ color: "#ffffff" }}>@launchit4 $TICKER</b> under any video! Our bot auto-scrapes the video, mints the coin on Solana, and replies with the link in seconds! 🐆
           </p>
         </div>
 

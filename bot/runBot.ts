@@ -2,7 +2,7 @@ import { TikTokListener, TikTokConfig } from "./tiktokListener";
 
 // Read from environment variables or config
 const config: TikTokConfig = {
-  botHandle: process.env.TIKTOK_BOT_HANDLE || "launchit.world",
+  botHandle: process.env.TIKTOK_BOT_HANDLE || "launchit4",
   sessionCookie: process.env.TIKTOK_SESSION_COOKIE || "",
   pollIntervalMs: 5000, // every 5 seconds
   solanaRpcUrl: process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com",
