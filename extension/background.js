@@ -7,91 +7,130 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "CHECK_TIKTOK_AUTH") {
     const expected = (request.expectedHandle || "").replace("@", "").trim().toLowerCase();
 
-    // Find any open TikTok tab to read live logged-in session
-    chrome.tabs.query({ url: "*://*.tiktok.com/*" }, async (tabs) => {
-      if (!tabs || tabs.length === 0) {
-        sendResponse({
-          success: false,
-          error: "No TikTok tab is open. Please open TikTok and ensure you are logged into the correct account."
-        });
-        return;
-      }
-
-      // Execute live user detection script inside the TikTok tab
+    (async () => {
       try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tabs[0].id },
-          func: () => {
-            // 1. Check sidebar nav profile link / avatar
-            const navSelectors = [
-              'a[data-e2e="profile-icon"]',
-              'a[data-e2e="nav-profile"]',
-              'a[data-e2e="user-avatar"]',
-              '[data-e2e="user-avatar"] a',
-              'header a[href^="/@"]',
-              'nav a[href^="/@"]',
-              'aside a[href^="/@"]',
-              'a[href^="/@"]'
-            ];
+        // 1. Check if user even has active TikTok session cookies
+        const cookies = await chrome.cookies.getAll({ domain: ".tiktok.com" });
+        const hasSession = cookies.some(
+          (c) => (c.name === "sessionid" || c.name === "sessionid_ss" || c.name === "sid_tt") && c.value && c.value.length > 5
+        );
 
-            for (const selector of navSelectors) {
-              const el = document.querySelector(selector);
-              const href = el?.getAttribute("href");
-              if (href && href.includes("/@")) {
-                const handle = href.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
-                if (handle && handle !== "foryou" && handle !== "live" && handle !== "explore") {
-                  return handle;
-                }
-              }
+        if (!hasSession) {
+          sendResponse({
+            success: false,
+            error: expected
+              ? `No active TikTok login detected. You are not logged into TikTok. Please sign into @${expected} on TikTok first.`
+              : "No active TikTok login detected. Please sign into TikTok first."
+          });
+          return;
+        }
+
+        let detectedUsername = "";
+
+        // 2. Try TikTok Passport API directly using session credentials
+        try {
+          const passportRes = await fetch("https://www.tiktok.com/passport/web/account/info/", {
+            credentials: "include",
+            headers: { "Accept": "application/json" }
+          });
+          if (passportRes.ok) {
+            const passportData = await passportRes.json();
+            const pUser = passportData?.data?.username || passportData?.data?.screen_name || passportData?.data?.unique_id;
+            if (pUser && typeof pUser === "string" && !pUser.includes("session")) {
+              detectedUsername = pUser.toLowerCase().trim();
             }
-
-            // 2. Check universal rehydration state script
-            try {
-              const stateEl = document.getElementById("__UNIVERSAL_DATA_FOR_REHYDRATION__");
-              if (stateEl) {
-                const data = JSON.parse(stateEl.textContent || "{}");
-                const defaultScope = data?.["__DEFAULT_SCOPE__"] || {};
-                const user = defaultScope?.["webapp.user-detail"]?.userInfo?.user?.uniqueId ||
-                             defaultScope?.["webapp.app-context"]?.user?.uniqueId;
-                if (user) return user;
-              }
-            } catch (_) {}
-
-            // 3. Check SIGI_STATE script
-            try {
-              const sigiEl = document.getElementById("SIGI_STATE");
-              if (sigiEl) {
-                const sigi = JSON.parse(sigiEl.textContent || "{}");
-                const user = sigi?.UserModule?.users?.[Object.keys(sigi?.UserModule?.users || {})[0]]?.uniqueId ||
-                             sigi?.AppContext?.user?.uniqueId;
-                if (user) return user;
-              }
-            } catch (_) {}
-
-            return null;
           }
-        });
+        } catch (_) {}
 
-        const detectedUsername = (results?.[0]?.result || "").toLowerCase().trim();
+        // 3. If passport didn't return username, inspect open TikTok tabs
+        if (!detectedUsername) {
+          const tabs = await chrome.tabs.query({ url: "*://*.tiktok.com/*" });
+          for (const tab of tabs) {
+            if (!tab.id) continue;
+            try {
+              const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                  // Profile nav selectors
+                  const navSelectors = [
+                    'a[data-e2e="profile-icon"]',
+                    'a[data-e2e="nav-profile"]',
+                    'a[data-e2e="user-avatar"]',
+                    '[data-e2e="user-avatar"] a',
+                    'header a[href^="/@"]',
+                    'nav a[href^="/@"]',
+                    'aside a[href^="/@"]',
+                    'a[href^="/@"]'
+                  ];
 
+                  for (const selector of navSelectors) {
+                    const el = document.querySelector(selector);
+                    const href = el?.getAttribute("href");
+                    if (href && href.includes("/@")) {
+                      const handle = href.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
+                      if (handle && !["foryou", "live", "explore", "following", "friends"].includes(handle.toLowerCase())) {
+                        return handle;
+                      }
+                    }
+                  }
+
+                  // Universal data script
+                  try {
+                    const stateEl = document.getElementById("__UNIVERSAL_DATA_FOR_REHYDRATION__");
+                    if (stateEl) {
+                      const data = JSON.parse(stateEl.textContent || "{}");
+                      const defaultScope = data?.["__DEFAULT_SCOPE__"] || {};
+                      const user = defaultScope?.["webapp.user-detail"]?.userInfo?.user?.uniqueId ||
+                                   defaultScope?.["webapp.app-context"]?.user?.uniqueId;
+                      if (user) return user;
+                    }
+                  } catch (_) {}
+
+                  // SIGI state script
+                  try {
+                    const sigiEl = document.getElementById("SIGI_STATE");
+                    if (sigiEl) {
+                      const sigi = JSON.parse(sigiEl.textContent || "{}");
+                      const user = sigi?.UserModule?.users?.[Object.keys(sigi?.UserModule?.users || {})[0]]?.uniqueId ||
+                                   sigi?.AppContext?.user?.uniqueId;
+                      if (user) return user;
+                    }
+                  } catch (_) {}
+
+                  return null;
+                }
+              });
+
+              const user = (results?.[0]?.result || "").toLowerCase().trim();
+              if (user) {
+                detectedUsername = user;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+
+        // 4. Validate detection result
         if (!detectedUsername) {
           sendResponse({
             success: false,
-            error: "Not logged into TikTok. Please log into TikTok in your browser first."
+            error: expected
+              ? `You have TikTok cookies, but we could not confirm your username. Please open TikTok and ensure you are signed into @${expected}.`
+              : "Unable to detect your TikTok username. Please log into TikTok in your browser."
           });
           return;
         }
 
-        // Strict verification: does detected user match the required account?
+        // 5. Strict Account Match Check: Does detected username match the expected vault owner?
         if (expected && detectedUsername !== expected) {
           sendResponse({
             success: false,
-            error: `Access Denied: You are signed into TikTok as @${detectedUsername}, but this vault belongs to @${expected}. Please switch to @${expected} on TikTok.`
+            error: `Access Denied: You are signed into TikTok as @${detectedUsername}, but this royalty vault belongs strictly to @${expected}. Only the verified owner can claim these funds.`
           });
           return;
         }
 
-        // 100% Verified Match!
+        // 6. 100% Verified Match!
         sendResponse({
           success: true,
           username: detectedUsername
@@ -99,11 +138,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       } catch (err) {
         sendResponse({
           success: false,
-          error: `Error inspecting TikTok tab: ${err?.message || "Unknown error"}`
+          error: `Verification error: ${err?.message || "Unknown error"}`
         });
       }
-    });
+    })();
 
-    return true; // Keep message port open for async response
+    return true; // Keep sendResponse open for async
   }
 });

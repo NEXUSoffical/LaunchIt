@@ -27,6 +27,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const hasCreatorWallet = Boolean(token.creatorWallet);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleOpenTikTokLogin = () => {
     setAuthError(null);
@@ -47,11 +48,56 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
     window.open("https://www.tiktok.com/logout", "TikTokLogin", `width=${width},height=${height},top=${top},left=${left}`);
   };
 
-  const handleConfirmLogin = () => {
+  const handleVerifyTikTokAuth = () => {
     setAuthError(null);
-    setIsTikTokVerified(true);
-    setVerifiedHandle(claimType === "creator" ? creatorHandle : (token.launcherHandle || "@launcher"));
-    setIsLoggingIn(false);
+    setIsVerifying(true);
+
+    const cleanExpected = creatorHandle.replace("@", "").trim();
+
+    const onAuthResult = (event: MessageEvent) => {
+      if (event.data?.type === "LAUNCHIT_TIKTOK_AUTH_RESULT") {
+        window.removeEventListener("message", onAuthResult);
+        clearTimeout(timeoutId);
+        setIsVerifying(false);
+
+        if (event.data.success) {
+          const detected = (event.data.username || "").toLowerCase().trim();
+          if (detected === cleanExpected.toLowerCase()) {
+            setIsTikTokVerified(true);
+            setVerifiedHandle(`@${detected}`);
+            setIsLoggingIn(false);
+          } else {
+            setIsTikTokVerified(false);
+            setAuthError(
+              `Access Denied: You are signed into TikTok as @${detected}, but this vault belongs strictly to @${cleanExpected}. Only the verified video creator can claim these funds.`
+            );
+          }
+        } else {
+          setIsTikTokVerified(false);
+          setAuthError(event.data.error || "Verification failed. Please ensure you are logged into TikTok.");
+        }
+      }
+    };
+
+    window.addEventListener("message", onAuthResult);
+
+    const timeoutId = setTimeout(() => {
+      window.removeEventListener("message", onAuthResult);
+      setIsVerifying(false);
+      setIsTikTokVerified(false);
+      setAuthError(
+        "Verification Failed: LaunchIt Extension not responding. Please make sure the LaunchIt Extension is enabled in chrome://extensions and you are logged into TikTok."
+      );
+    }, 5000);
+
+    // Request extension bridge to check active TikTok session
+    window.postMessage(
+      {
+        type: "LAUNCHIT_REQUEST_TIKTOK_AUTH",
+        expectedHandle: cleanExpected,
+      },
+      "*"
+    );
   };
 
   const handleClaim = () => {
@@ -278,123 +324,17 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                   </div>
                 </div>
 
-                {/* Step 1: TikTok Sign-in Verification */}
-                {!isTikTokVerified ? (
+                {/* Branch by Claim Type */}
+                {claimType === "launcher" ? (
+                  /* Launcher / Deployer Flow: Direct Solana Wallet Routing */
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     <div style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#cbd5e1" }}>
-                      {claimType === "creator" ? (
-                        <>Sign into the TikTok account that created this video (<b>{creatorHandle}</b>) to claim royalties:</>
-                      ) : (
-                        <>Sign into the TikTok account you used to launch this coin:</>
-                      )}
-                    </div>
-
-                    {authError && (
-                      <div
-                        style={{
-                          background: "rgba(239, 68, 68, 0.15)",
-                          border: "1px solid rgba(239, 68, 68, 0.5)",
-                          borderRadius: "10px",
-                          padding: "12px 14px",
-                          color: "#fca5a5",
-                          fontSize: "0.85rem",
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        <div style={{ fontWeight: 700 }}>❌ Verification Denied</div>
-                        <div style={{ marginTop: "4px" }}>{authError}</div>
-                      </div>
-                    )}
-
-                    {!isLoggingIn ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                        <button
-                          type="button"
-                          onClick={handleOpenTikTokLogin}
-                          style={{
-                            padding: "14px",
-                            borderRadius: "12px",
-                            border: "1px solid rgba(255, 255, 255, 0.2)",
-                            background: "#000000",
-                            color: "#ffffff",
-                            fontSize: "1rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "10px",
-                            boxShadow: "0 4px 15px rgba(0, 0, 0, 0.4)",
-                          }}
-                        >
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
-                          </svg>
-                          <span>Sign in with TikTok</span>
-                        </button>
-
-                        <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>Already signed into a different account?</span>
-                          <button
-                            type="button"
-                            onClick={handleOpenTikTokLogout}
-                            style={{ background: "none", border: "none", color: "#ff8c37", cursor: "pointer", fontWeight: 600, textDecoration: "underline", padding: 0 }}
-                          >
-                            Log Out First to Switch ↗
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(255, 96, 0, 0.3)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#ff8c37", display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#ff8c37" }} />
-                          TikTok Login Window Active
-                        </div>
-                        <div style={{ fontSize: "0.82rem", color: "#cbd5e1", lineHeight: 1.5 }}>
-                          Please complete your sign-in in the TikTok popup window. If TikTok says you are already logged in to the wrong account, click:
-                          <div style={{ marginTop: "6px" }}>
-                            <button
-                              type="button"
-                              onClick={handleOpenTikTokLogout}
-                              style={{ background: "none", border: "none", color: "#ff8c37", textDecoration: "underline", cursor: "pointer", fontWeight: 700, padding: 0 }}
-                            >
-                              Log Out on TikTok to Switch Account ↗
-                            </button>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={handleConfirmLogin}
-                          className="btn-primary"
-                          style={{
-                            width: "100%",
-                            padding: "14px",
-                            fontSize: "0.95rem",
-                            fontWeight: 800,
-                            borderRadius: "10px",
-                            marginTop: "4px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          ✓ I Have Signed In &rarr; Unlock Payout
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Step 2: Verified -> Enter Solana Payout Wallet */
-                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={{ background: "rgba(20, 241, 149, 0.12)", border: "1px solid rgba(20, 241, 149, 0.4)", borderRadius: "10px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
-                      <CheckCircle2 size={18} color="#14f195" />
-                      <div style={{ fontSize: "0.82rem", color: "#14f195" }}>
-                        Verified as <b>{verifiedHandle}</b> on TikTok!
-                      </div>
+                      Deployer royalties are reserved for the coin launcher. Provide your Solana payout wallet below:
                     </div>
 
                     <div>
                       <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "6px" }}>
-                        Where should we send your {((claimType === "creator" ? creatorSol : launcherSol)).toFixed(4)} SOL? (Phantom / Solflare / Coinbase)
+                        Where should we send your {launcherSol.toFixed(4)} SOL? (Phantom / Solflare / Coinbase)
                       </label>
                       <input
                         type="text"
@@ -432,6 +372,147 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                       {isClaiming ? "Transferring SOL to Wallet..." : "Withdraw & Route Royalties to Wallet"}
                     </button>
                   </div>
+                ) : (
+                  /* Creator Flow: STRICT Real TikTok Verification */
+                  !isTikTokVerified ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                      <div style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#cbd5e1" }}>
+                        To protect creator funds, you must authenticate as the real owner of this video: <b style={{ color: "#14f195" }}>{creatorHandle}</b>
+                      </div>
+
+                      {authError && (
+                        <div
+                          style={{
+                            background: "rgba(239, 68, 68, 0.15)",
+                            border: "1px solid rgba(239, 68, 68, 0.5)",
+                            borderRadius: "10px",
+                            padding: "12px 14px",
+                            color: "#fca5a5",
+                            fontSize: "0.85rem",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          <div style={{ fontWeight: 700 }}>❌ Verification Denied</div>
+                          <div style={{ marginTop: "4px" }}>{authError}</div>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        <button
+                          type="button"
+                          onClick={handleOpenTikTokLogin}
+                          style={{
+                            padding: "14px",
+                            borderRadius: "12px",
+                            border: "1px solid rgba(255, 255, 255, 0.2)",
+                            background: "#000000",
+                            color: "#ffffff",
+                            fontSize: "1rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "10px",
+                            boxShadow: "0 4px 15px rgba(0, 0, 0, 0.4)",
+                          }}
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
+                          </svg>
+                          <span>Sign in with TikTok</span>
+                        </button>
+
+                        <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Already signed into a different account?</span>
+                          <button
+                            type="button"
+                            onClick={handleOpenTikTokLogout}
+                            style={{ background: "none", border: "none", color: "#ff8c37", cursor: "pointer", fontWeight: 600, textDecoration: "underline", padding: 0 }}
+                          >
+                            Log Out First to Switch ↗
+                          </button>
+                        </div>
+
+                        {/* Real Verification Action */}
+                        <button
+                          type="button"
+                          onClick={handleVerifyTikTokAuth}
+                          disabled={isVerifying}
+                          style={{
+                            width: "100%",
+                            padding: "14px",
+                            fontSize: "0.95rem",
+                            fontWeight: 800,
+                            borderRadius: "10px",
+                            marginTop: "6px",
+                            cursor: isVerifying ? "not-allowed" : "pointer",
+                            background: isVerifying ? "rgba(255, 96, 0, 0.5)" : "linear-gradient(135deg, #14f195 0%, #00b4d8 100%)",
+                            color: "#000",
+                            border: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "8px",
+                            boxShadow: "0 4px 15px rgba(20, 241, 149, 0.3)",
+                          }}
+                        >
+                          <ShieldCheck size={20} />
+                          <span>{isVerifying ? "Verifying TikTok Session..." : "Verify TikTok Account & Unlock Royalties"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Step 2: 100% Genuine Match -> Enter Solana Payout Wallet */
+                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                      <div style={{ background: "rgba(20, 241, 149, 0.12)", border: "1px solid rgba(20, 241, 149, 0.4)", borderRadius: "10px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
+                        <CheckCircle2 size={18} color="#14f195" />
+                        <div style={{ fontSize: "0.82rem", color: "#14f195" }}>
+                          Verified as <b>{verifiedHandle}</b> on TikTok!
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "6px" }}>
+                          Where should we send your {creatorSol.toFixed(4)} SOL? (Phantom / Solflare / Coinbase)
+                        </label>
+                        <input
+                          type="text"
+                          value={payoutAddress}
+                          onChange={(e) => setPayoutAddress(e.target.value)}
+                          placeholder="e.g. 7WdK...9R2e"
+                          className="mono"
+                          style={{
+                            width: "100%",
+                            boxSizing: "border-box",
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--border-subtle)",
+                            borderRadius: "10px",
+                            padding: "12px 14px",
+                            color: "#fff",
+                            fontSize: "0.85rem",
+                          }}
+                        />
+                      </div>
+
+                      <button
+                        onClick={handleClaim}
+                        disabled={isClaiming || !payoutAddress.trim()}
+                        className="btn-primary"
+                        style={{
+                          padding: "14px",
+                          fontWeight: 800,
+                          fontSize: "0.95rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        {isClaiming ? "Transferring SOL to Wallet..." : "Withdraw & Route Royalties to Wallet"}
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             )}
