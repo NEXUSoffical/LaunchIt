@@ -50,8 +50,24 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
         symbol: decodeURIComponent(newSymbol).toUpperCase().replace("$", ""),
         description: videoUrl ? `Launched directly from TikTok: ${decodeURIComponent(videoUrl)}` : "Launched directly on LaunchIt via 1-click in-app.",
         image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
-        creator: params.get("creator") ? decodeURIComponent(params.get("creator")!) : "@tiktok_creator",
-        creatorHandle: params.get("creator") ? decodeURIComponent(params.get("creator")!) : "@tiktok_creator",
+        creator: (() => {
+          const raw = params.get("creator");
+          if (raw) return decodeURIComponent(raw);
+          if (videoUrl) {
+            const m = decodeURIComponent(videoUrl).match(/@([^/?#]+)/);
+            if (m) return `@${m[1]}`;
+          }
+          return "@tiktok_creator";
+        })(),
+        creatorHandle: (() => {
+          const raw = params.get("creator");
+          if (raw) return decodeURIComponent(raw);
+          if (videoUrl) {
+            const m = decodeURIComponent(videoUrl).match(/@([^/?#]+)/);
+            if (m) return `@${m[1]}`;
+          }
+          return "@tiktok_creator";
+        })(),
         launcherWallet: params.get("launcher_wallet") ? decodeURIComponent(params.get("launcher_wallet")!) : null,
         feeSplit: (params.get("fee_split") as any) || "split_50_50",
         unclaimedCreatorFeesSol: 0,
