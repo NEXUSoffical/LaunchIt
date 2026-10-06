@@ -61,66 +61,38 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
       `width=${width},height=${height},top=${top},left=${left}`
     );
 
-    // 2. Setup listener for extension response
-    let pollInterval: any = null;
+    // 2. Setup watcher: DO NOT close popup manually while user is typing!
+    // Popup will auto-close when TikTok redirects after successful login, or user closes it.
+    let checkInterval: any = null;
 
-    const onAuthResult = (event: MessageEvent) => {
-      if (event.data?.type === "LAUNCHIT_TIKTOK_AUTH_RESULT") {
-        const res = event.data;
-        const detected = (res.username || res.detectedUsername || "").toLowerCase().trim();
+    const cleanup = () => {
+      if (checkInterval) clearInterval(checkInterval);
+      window.removeEventListener("message", onMessage);
+    };
 
-        // Close popup window immediately as soon as ANY session is detected or login finishes
-        if (res.success || detected || (res.error && res.error.includes("Access Denied"))) {
-          try {
-            if (popup && !popup.closed) popup.close();
-          } catch (_) {}
-          window.focus();
-
-          if (pollInterval) clearInterval(pollInterval);
-          window.removeEventListener("message", onAuthResult);
-          setIsVerifying(false);
-
-          if (res.success) {
-            setIsTikTokVerified(true);
-            setVerifiedHandle(`@${res.username}`);
-            setAuthError(null);
-          } else {
-            setIsTikTokVerified(false);
-            setAuthError(
-              res.error || `Access Denied: You signed into TikTok as @${detected}, but this vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
-            );
-          }
-        }
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === "LAUNCHIT_TIKTOK_LOGIN_COMPLETED") {
+        cleanup();
+        setTimeout(() => handleDirectVerify(), 400);
       }
     };
 
-    window.addEventListener("message", onAuthResult);
+    window.addEventListener("message", onMessage);
 
-    // 3. Poll every 1 second to detect when user logs in and immediately close popup
-    pollInterval = setInterval(() => {
-      if (popup && popup.closed) {
-        clearInterval(pollInterval);
-        // Final verification check upon popup closing
-        window.postMessage(
-          { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
-          "*"
-        );
-        setTimeout(() => setIsVerifying(false), 1500);
-        return;
+    // Watch for popup close event
+    checkInterval = setInterval(() => {
+      if (!popup || popup.closed) {
+        cleanup();
+        // Popup has closed! Now perform strict TikTok verification check
+        setTimeout(() => handleDirectVerify(), 500);
       }
-
-      window.postMessage(
-        { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
-        "*"
-      );
-    }, 1200);
+    }, 500);
 
     // Timeout safety
     setTimeout(() => {
-      if (pollInterval) clearInterval(pollInterval);
-      window.removeEventListener("message", onAuthResult);
+      cleanup();
       setIsVerifying(false);
-    }, 90000);
+    }, 120000);
   };
 
   const handleDirectVerify = () => {
@@ -134,20 +106,24 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         clearTimeout(timeoutId);
         setIsVerifying(false);
 
-        if (event.data.success) {
-          const detected = (event.data.username || "").toLowerCase().trim();
+        const res = event.data;
+        if (res.success) {
+          const detected = (res.username || "").toLowerCase().trim();
           if (detected === cleanExpected.toLowerCase()) {
             setIsTikTokVerified(true);
             setVerifiedHandle(`@${detected}`);
+            setAuthError(null);
           } else {
             setIsTikTokVerified(false);
             setAuthError(
-              `Access Denied: You are signed into TikTok as @${detected}, but this vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
+              `Access Denied: You are signed into TikTok as @${detected}, but this royalty vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
             );
           }
         } else {
           setIsTikTokVerified(false);
-          setAuthError(event.data.error || "Verification failed. Please sign into TikTok.");
+          setAuthError(
+            res.error || `Verification failed. Please sign into @${cleanExpected} on TikTok.`
+          );
         }
       }
     };
@@ -158,14 +134,24 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
       window.removeEventListener("message", onAuthResult);
       setIsVerifying(false);
       setAuthError(
-        "Verification Failed: LaunchIt Extension not responding. Please make sure the LaunchIt Extension is enabled in chrome://extensions and you are logged into TikTok."
+        "Verification Timed Out: LaunchIt Extension not responding. Please make sure the LaunchIt Extension is enabled in chrome://extensions and you are logged into TikTok."
       );
-    }, 4000);
+    }, 6000);
 
     window.postMessage(
       { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
       "*"
     );
+  };
+
+  const handleLogoutTikTok = () => {
+    setAuthError(null);
+    setIsVerifying(true);
+    window.postMessage({ type: "LAUNCHIT_REQUEST_LOGOUT" }, "*");
+    setTimeout(() => {
+      setIsVerifying(false);
+      setAuthError(`Logged out of TikTok session. Click "Sign in with TikTok" to sign into ${creatorHandle}.`);
+    }, 600);
   };
 
   const handleClaim = () => {
@@ -447,16 +433,37 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                         <span>{isVerifying ? "Waiting for Sign In (Window auto-closes on login)..." : "Sign in with TikTok"}</span>
                       </button>
 
+                      {/* Check Active Session (if user already logged in previously) */}
+                      <button
+                        type="button"
+                        onClick={handleDirectVerify}
+                        disabled={isVerifying}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.05)",
+                          border: "1px solid rgba(255, 255, 255, 0.12)",
+                          borderRadius: "10px",
+                          padding: "10px 14px",
+                          color: "#94a3b8",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          cursor: isVerifying ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <ShieldCheck size={16} color="#14f195" />
+                        <span>Already signed into {creatorHandle}? Verify Active Session</span>
+                      </button>
+
                       {/* Silent 1-Click Logout: Clears TikTok cookies in background without taking user to TikTok */}
                       <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span>Logged into a different TikTok account?</span>
                         <button
                           type="button"
-                          onClick={() => {
-                            setAuthError(null);
-                            window.postMessage({ type: "LAUNCHIT_REQUEST_LOGOUT" }, "*");
-                            setAuthError("Logged out of TikTok session. Click Sign in with TikTok to sign in.");
-                          }}
+                          onClick={handleLogoutTikTok}
                           style={{
                             background: "none",
                             border: "none",

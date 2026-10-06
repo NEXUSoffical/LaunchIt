@@ -3,6 +3,7 @@
  * Injected on launchit.world to connect the web app with the user's active TikTok session.
  */
 
+// Listen for messages from web page
 window.addEventListener("message", (event) => {
   if (event.source !== window) return;
 
@@ -56,6 +57,8 @@ window.addEventListener("message", (event) => {
         "*"
       );
     }
+  }
+
   if (event.data?.type === "LAUNCHIT_REQUEST_LOGOUT") {
     try {
       chrome.runtime.sendMessage({ type: "LOGOUT_TIKTOK" }, (response) => {
@@ -64,6 +67,21 @@ window.addEventListener("message", (event) => {
     } catch (_) {}
   }
 });
+
+// Listen for push notifications from background (e.g. login completed)
+try {
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "TIKTOK_LOGIN_COMPLETED") {
+      window.postMessage(
+        {
+          type: "LAUNCHIT_TIKTOK_LOGIN_COMPLETED",
+          username: message.username
+        },
+        "*"
+      );
+    }
+  });
+} catch (_) {}
 
 // Broadcast that extension bridge is active on launchit.world
 window.postMessage({ type: "LAUNCHIT_EXTENSION_READY" }, "*");

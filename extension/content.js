@@ -7,18 +7,55 @@ console.log("🐆 LaunchIt TikTok Extension active!");
 
 // Auto-close login popup once login completes so video feed never plays
 if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
+  const getUsernameFromPage = () => {
+    if (window.location.pathname.startsWith("/@")) {
+      const u = window.location.pathname.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
+      if (u) return u;
+    }
+    const selectors = [
+      'a[data-e2e="profile-icon"]',
+      'a[data-e2e="nav-profile"]',
+      'a[data-e2e="user-avatar"]',
+      '[data-e2e="user-avatar"] a',
+      'header a[href*="/@"]',
+      'nav a[href*="/@"]',
+      'aside a[href*="/@"]'
+    ];
+    for (const s of selectors) {
+      const el = document.querySelector(s);
+      const href = el?.getAttribute("href") || "";
+      if (href.includes("/@")) {
+        const u = href.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
+        if (u && !["foryou", "live", "explore", "following", "friends"].includes(u.toLowerCase())) {
+          return u;
+        }
+      }
+    }
+    return "";
+  };
+
   const checkLoginRedirect = () => {
     const path = window.location.pathname;
-    if (path.includes("/foryou") || path.startsWith("/@") || (path === "/" && document.cookie.includes("sessionid"))) {
+    // CRITICAL: NEVER close while user is on /login or /signup
+    if (path.includes("/login") || path.includes("/signup")) {
+      return;
+    }
+
+    // Once redirected to feed, profile, or home with session:
+    if (path.includes("/foryou") || path.startsWith("/@") || (path === "/" && (document.cookie.includes("sessionid") || document.cookie.includes("sid_tt")))) {
+      const u = getUsernameFromPage();
       try {
-        chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED" });
+        chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED", username: u });
       } catch (_) {}
-      window.close();
+      setTimeout(() => {
+        try { window.close(); } catch (_) {}
+      }, 350);
     }
   };
   checkLoginRedirect();
   setInterval(checkLoginRedirect, 500);
 }
+
 
 function injectLaunchItUI() {
   // 1. Inject Floating LaunchIt Widget in bottom corner if not present
