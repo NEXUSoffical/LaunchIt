@@ -41,54 +41,62 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({
             </tr>
           </thead>
           <tbody>
-            {trades.map((trade) => {
-              const secondsAgo = Math.max(1, Math.floor((Date.now() - trade.timestamp) / 1000));
-              const timeDisplay = secondsAgo < 60 ? `${secondsAgo}s ago` : `${Math.floor(secondsAgo / 60)}m ago`;
+            {trades.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--text-muted)" }}>
+                  No trades yet. Be the first to buy on the bonding curve!
+                </td>
+              </tr>
+            ) : (
+              trades.map((trade) => {
+                const secondsAgo = Math.max(1, Math.floor((Date.now() - trade.timestamp) / 1000));
+                const timeDisplay = secondsAgo < 60 ? `${secondsAgo}s ago` : `${Math.floor(secondsAgo / 60)}m ago`;
 
-              return (
-                <tr
-                  key={trade.id}
-                  style={{
-                    borderBottom: "1px solid rgba(255, 255, 255, 0.03)",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  <td style={{ padding: "10px 6px" }}>
-                    <span
-                      style={{
-                        color: trade.isBuy ? "#10b981" : "#ef4444",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {trade.isBuy ? "BUY" : "SELL"}
-                    </span>
-                  </td>
-                  <td className="mono" style={{ padding: "10px 6px", fontWeight: 600 }}>
-                    {trade.solAmount.toFixed(2)}
-                  </td>
-                  <td className="mono" style={{ padding: "10px 6px", color: "var(--text-secondary)" }}>
-                    {(trade.tokenAmount / 1e6).toFixed(2)}M
-                  </td>
-                  <td className="mono" style={{ padding: "10px 6px", color: "var(--solana-cyan)" }}>
-                    {trade.user}
-                  </td>
-                  <td style={{ padding: "10px 6px", color: "var(--text-muted)" }}>
-                    {timeDisplay}
-                  </td>
-                  <td style={{ padding: "10px 6px", textAlign: "right" }}>
-                    <a
-                      href={`https://solscan.io/tx/${trade.txHash}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "2px" }}
-                    >
-                      <span className="mono" style={{ fontSize: "0.75rem" }}>{trade.txHash.slice(0, 6)}</span>
-                      <ExternalLink size={12} />
-                    </a>
-                  </td>
-                </tr>
-              );
-            })}
+                return (
+                  <tr
+                    key={trade.id}
+                    style={{
+                      borderBottom: "1px solid rgba(255, 255, 255, 0.03)",
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    <td style={{ padding: "10px 6px" }}>
+                      <span
+                        style={{
+                          color: trade.isBuy ? "#10b981" : "#ef4444",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {trade.isBuy ? "BUY" : "SELL"}
+                      </span>
+                    </td>
+                    <td className="mono" style={{ padding: "10px 6px", fontWeight: 600 }}>
+                      {trade.solAmount.toFixed(2)}
+                    </td>
+                    <td className="mono" style={{ padding: "10px 6px", color: "var(--text-secondary)" }}>
+                      {(trade.tokenAmount / 1e6).toFixed(2)}M
+                    </td>
+                    <td className="mono" style={{ padding: "10px 6px", color: "var(--solana-cyan)" }}>
+                      {trade.user}
+                    </td>
+                    <td style={{ padding: "10px 6px", color: "var(--text-muted)" }}>
+                      {timeDisplay}
+                    </td>
+                    <td style={{ padding: "10px 6px", textAlign: "right" }}>
+                      <a
+                        href={`https://solscan.io/tx/${trade.txHash}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "2px" }}
+                      >
+                        <span className="mono" style={{ fontSize: "0.75rem" }}>{trade.txHash.slice(0, 6)}</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

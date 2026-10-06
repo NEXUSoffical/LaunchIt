@@ -13,12 +13,14 @@ const getInitialTokens = (): Token[] => {
     const saved = localStorage.getItem("launchit_tokens_db");
     if (saved) {
       const parsed: Token[] = JSON.parse(saved);
-      const map = new Map<string, Token>();
-      for (const t of parsed) map.set(t.mint, t);
-      for (const t of INITIAL_TOKENS) {
-        if (!map.has(t.mint)) map.set(t.mint, t);
+      const purged = parsed.filter(
+        (t) =>
+          !["genesis-ai", "sol-cyber-pepe", "quantum-sol", "neon-samurai"].includes(t.id) &&
+          !["GENESIS", "CPEPE", "QSOL", "SAMURAI"].includes(t.symbol)
+      );
+      if (purged.length > 0) {
+        return purged;
       }
-      return Array.from(map.values());
     }
   } catch (e) {
     console.error("Failed to parse saved tokens", e);
@@ -122,33 +124,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Subtle simulated background activity to give the exchange a lively pulse
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (Math.random() > 0.4) {
-        const randomToken = tokens[Math.floor(Math.random() * tokens.length)];
-        const isBuy = Math.random() > 0.45;
-        const solAmt = parseFloat((Math.random() * 1.5 + 0.1).toFixed(2));
-        const tokenAmt = Math.round(solAmt * 9_500_000);
-
-        const simulatedTrade: Trade = {
-          id: `sim-${Date.now()}`,
-          mint: randomToken.mint,
-          user: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
-          isBuy,
-          solAmount: solAmt,
-          tokenAmount: tokenAmt,
-          priceSol: randomToken.priceSol,
-          timestamp: Date.now(),
-          txHash: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
-        };
-
-        setTrades((prev) => [simulatedTrade, ...prev.slice(0, 40)]);
-      }
-    }, 12000);
-
-    return () => clearInterval(interval);
-  }, [tokens]);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
