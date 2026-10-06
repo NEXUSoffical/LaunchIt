@@ -128,10 +128,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
 
+        // Auto-close any popup TikTok login windows so they never play the video feed
+        try {
+          const allTabs = await chrome.tabs.query({ url: "*://*.tiktok.com/*" });
+          for (const t of allTabs) {
+            if (t.id && t.url && (t.url.includes("/login") || t.url.includes("/signup") || t.url.includes("/foryou"))) {
+              const win = await chrome.windows.get(t.windowId);
+              if (win && (win.type === "popup" || (win.width && win.width <= 650))) {
+                await chrome.tabs.remove(t.id);
+              }
+            }
+          }
+        } catch (_) {}
+
         // 5. Strict Account Match Check: Does detected username match the expected vault owner?
         if (expected && detectedUsername !== expected) {
           sendResponse({
             success: false,
+            detectedUsername: detectedUsername,
             error: `Access Denied: You are signed into TikTok as @${detectedUsername}, but this royalty vault belongs strictly to @${expected}. Only the verified owner can claim these funds.`
           });
           return;

@@ -66,29 +66,29 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
     const onAuthResult = (event: MessageEvent) => {
       if (event.data?.type === "LAUNCHIT_TIKTOK_AUTH_RESULT") {
-        if (event.data.success) {
-          const detected = (event.data.username || "").toLowerCase().trim();
-          if (detected) {
-            // Close popup immediately so it NEVER plays TikTok video feed
-            try {
-              if (popup && !popup.closed) popup.close();
-            } catch (_) {}
-            window.focus();
+        const res = event.data;
+        const detected = (res.username || res.detectedUsername || "").toLowerCase().trim();
 
-            if (pollInterval) clearInterval(pollInterval);
-            window.removeEventListener("message", onAuthResult);
-            setIsVerifying(false);
+        // Close popup window immediately as soon as ANY session is detected or login finishes
+        if (res.success || detected || (res.error && res.error.includes("Access Denied"))) {
+          try {
+            if (popup && !popup.closed) popup.close();
+          } catch (_) {}
+          window.focus();
 
-            if (detected === cleanExpected.toLowerCase()) {
-              setIsTikTokVerified(true);
-              setVerifiedHandle(`@${detected}`);
-              setAuthError(null);
-            } else {
-              setIsTikTokVerified(false);
-              setAuthError(
-                `Access Denied: You signed into TikTok as @${detected}, but this vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
-              );
-            }
+          if (pollInterval) clearInterval(pollInterval);
+          window.removeEventListener("message", onAuthResult);
+          setIsVerifying(false);
+
+          if (res.success) {
+            setIsTikTokVerified(true);
+            setVerifiedHandle(`@${res.username}`);
+            setAuthError(null);
+          } else {
+            setIsTikTokVerified(false);
+            setAuthError(
+              res.error || `Access Denied: You signed into TikTok as @${detected}, but this vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
+            );
           }
         }
       }
