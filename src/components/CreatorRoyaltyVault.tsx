@@ -18,7 +18,6 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
   const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [manualHandleInput, setManualHandleInput] = useState("");
 
   const split = token.feeSplit || "split_50_50";
   const creatorSol = token.unclaimedCreatorFeesSol || 0;
@@ -32,9 +31,6 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const handleOpenTikTokLogin = () => {
     setAuthError(null);
     setIsLoggingIn(true);
-    if (!manualHandleInput) {
-      setManualHandleInput(claimType === "creator" ? creatorHandle : "");
-    }
     const width = 550;
     const height = 750;
     const left = window.screen.width / 2 - width / 2;
@@ -51,30 +47,11 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
     window.open("https://www.tiktok.com/logout", "TikTokLogin", `width=${width},height=${height},top=${top},left=${left}`);
   };
 
-  const handleConfirmLogin = (accountHandle: string) => {
+  const handleConfirmLogin = () => {
     setAuthError(null);
-    const entered = accountHandle.trim().replace("@", "").toLowerCase();
-    if (!entered) {
-      setAuthError("Please enter your TikTok username to verify.");
-      return;
-    }
-
-    if (claimType === "creator") {
-      const required = creatorHandle.replace("@", "").trim().toLowerCase();
-      if (entered !== required) {
-        setAuthError(`❌ Access Denied: You entered @${entered}, but this video belongs to @${required}. Only @${required} can claim this vault.`);
-        return;
-      }
-      setIsTikTokVerified(true);
-      setVerifiedHandle(`@${entered}`);
-      setIsLoggingIn(false);
-      setAuthError(null);
-    } else {
-      setIsTikTokVerified(true);
-      setVerifiedHandle(`@${entered}`);
-      setIsLoggingIn(false);
-      setAuthError(null);
-    }
+    setIsTikTokVerified(true);
+    setVerifiedHandle(claimType === "creator" ? creatorHandle : (token.launcherHandle || "@launcher"));
+    setIsLoggingIn(false);
   };
 
   const handleClaim = () => {
@@ -368,47 +345,40 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                         </div>
                       </div>
                     ) : (
-                      <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(255, 96, 0, 0.3)", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                        <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#ff8c37", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "#ff8c37" }} />
+                      <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(255, 96, 0, 0.3)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#ff8c37", display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#ff8c37" }} />
                           TikTok Login Window Active
                         </div>
-                        <div style={{ fontSize: "0.78rem", color: "#cbd5e1", lineHeight: 1.4 }}>
-                          Log into TikTok in the popup window. If TikTok says "already logged in", click:
-                          <button
-                            type="button"
-                            onClick={handleOpenTikTokLogout}
-                            style={{ background: "none", border: "none", color: "#ff8c37", textDecoration: "underline", cursor: "pointer", fontWeight: 600, padding: "0 4px" }}
-                          >
-                            Log Out to Switch Account ↗
-                          </button>
+                        <div style={{ fontSize: "0.82rem", color: "#cbd5e1", lineHeight: 1.5 }}>
+                          Please complete your sign-in in the TikTok popup window. If TikTok says you are already logged in to the wrong account, click:
+                          <div style={{ marginTop: "6px" }}>
+                            <button
+                              type="button"
+                              onClick={handleOpenTikTokLogout}
+                              style={{ background: "none", border: "none", color: "#ff8c37", textDecoration: "underline", cursor: "pointer", fontWeight: 700, padding: 0 }}
+                            >
+                              Log Out on TikTok to Switch Account ↗
+                            </button>
+                          </div>
                         </div>
 
-                        <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                          <input
-                            type="text"
-                            value={manualHandleInput}
-                            onChange={(e) => setManualHandleInput(e.target.value)}
-                            placeholder={claimType === "creator" ? `Signed in as: ${creatorHandle}` : "Your signed-in @handle"}
-                            style={{
-                              flex: 1,
-                              padding: "10px 12px",
-                              borderRadius: "8px",
-                              background: "#0f172a",
-                              border: "1px solid rgba(255, 255, 255, 0.2)",
-                              color: "#fff",
-                              fontSize: "0.9rem",
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmLogin(manualHandleInput)}
-                            className="btn-primary"
-                            style={{ padding: "0 16px", fontSize: "0.85rem", fontWeight: 700, borderRadius: "8px", whiteSpace: "nowrap" }}
-                          >
-                            Confirm Sign-in
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={handleConfirmLogin}
+                          className="btn-primary"
+                          style={{
+                            width: "100%",
+                            padding: "14px",
+                            fontSize: "0.95rem",
+                            fontWeight: 800,
+                            borderRadius: "10px",
+                            marginTop: "4px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✓ I Have Signed In &rarr; Unlock Payout
+                        </button>
                       </div>
                     )}
                   </div>
