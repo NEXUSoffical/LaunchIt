@@ -5,52 +5,76 @@
 
 console.log("🐆 LaunchIt TikTok Extension active!");
 
-function injectLaunchItButton() {
-  // Find TikTok video action bars (Like, Comment, Share container)
-  const actionBars = document.querySelectorAll(
-    'div[class*="DivActionItemContainer"], div[class*="ActionItemContainer"], section[class*="SectionAction"]'
-  );
-
-  actionBars.forEach((bar) => {
-    if (bar.querySelector(".launchit-btn-injected")) return; // already injected
-
-    const launchBtn = document.createElement("div");
-    launchBtn.className = "launchit-btn-injected";
-    launchBtn.title = "Launch this video as a Solana coin on LaunchIt!";
-    launchBtn.innerHTML = `
-      <div class="launchit-icon-wrapper">
-        <img src="${chrome.runtime.getURL("icon.jpg")}" alt="LaunchIt" />
-      </div>
-      <span class="launchit-btn-text">LaunchIt</span>
+function injectLaunchItUI() {
+  // 1. Inject Floating LaunchIt Widget in bottom corner if not present
+  if (!document.querySelector(".launchit-floating-widget")) {
+    const floatBtn = document.createElement("div");
+    floatBtn.className = "launchit-floating-widget";
+    floatBtn.innerHTML = `
+      <img src="${chrome.runtime.getURL("icon.jpg")}" alt="LaunchIt" />
+      <span>Launch This Video 🐆</span>
     `;
 
-    launchBtn.addEventListener("click", (e) => {
+    floatBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
       openInAppLaunchModal();
     });
 
-    bar.appendChild(launchBtn);
+    document.body.appendChild(floatBtn);
+  }
+
+  // 2. Also try to find the video action bar (near Like / Comment / Share)
+  const shareButtons = document.querySelectorAll(
+    'button[data-e2e="share-icon"], button[data-e2e="comment-icon"], button[data-e2e="like-icon"], div[data-e2e="feed-video-action"]'
+  );
+
+  shareButtons.forEach((btn) => {
+    const parent = btn.parentElement?.parentElement;
+    if (parent && !parent.querySelector(".launchit-btn-injected")) {
+      const colBtn = document.createElement("div");
+      colBtn.className = "launchit-btn-injected";
+      colBtn.title = "Launch this video as a Solana coin on LaunchIt!";
+      colBtn.innerHTML = `
+        <div class="launchit-icon-wrapper">
+          <img src="${chrome.runtime.getURL("icon.jpg")}" alt="LaunchIt" />
+        </div>
+        <span class="launchit-btn-text">LaunchIt</span>
+      `;
+
+      colBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        openInAppLaunchModal();
+      });
+
+      parent.appendChild(colBtn);
+    }
   });
 }
 
 function extractCurrentVideoData() {
-  // Extract video title/description and creator handle from TikTok DOM
   let title = "Viral TikTok Meme";
-  let creator = "@tiktok_creator";
+  let creator = "@creator";
   let url = window.location.href;
 
-  const descEl = document.querySelector('h1[data-e2e="browse-video-desc"], div[data-e2e="browse-video-desc"], span[data-e2e="browse-video-desc"]');
+  // Extract description
+  const descEl = document.querySelector(
+    'h1[data-e2e="browse-video-desc"], div[data-e2e="browse-video-desc"], span[data-e2e="browse-video-desc"], [data-e2e="video-desc"]'
+  );
   if (descEl && descEl.textContent) {
-    title = descEl.textContent.trim().split("#")[0].trim() || "Viral Meme";
+    title = descEl.textContent.trim().split("#")[0].trim() || "Viral TikTok Meme";
   }
 
-  const creatorEl = document.querySelector('span[data-e2e="browse-username"], h3[data-e2e="browse-username"]');
+  // Extract author
+  const creatorEl = document.querySelector(
+    'span[data-e2e="browse-username"], h3[data-e2e="browse-username"], [data-e2e="video-author-uniqueid"]'
+  );
   if (creatorEl && creatorEl.textContent) {
     creator = creatorEl.textContent.trim();
   }
 
-  // Generate clean ticker symbol
+  // Generate suggested ticker
   const cleaned = title.replace(/[^a-zA-Z0-9 ]/g, "").trim().split(" ");
   let ticker = cleaned[0]?.toUpperCase() || "VIRAL";
   if (ticker.length > 8) ticker = ticker.slice(0, 8);
@@ -76,7 +100,7 @@ function openInAppLaunchModal() {
             <div style="font-size: 11px; color: #ff8c37; font-weight: 600;">— see it launch it —</div>
           </div>
         </div>
-        <button id="launchit-close-btn" style="background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer;">&times;</button>
+        <button id="launchit-close-btn" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; line-height: 1;">&times;</button>
       </div>
 
       <div style="background: rgba(255, 96, 0, 0.1); border: 1px solid rgba(255, 96, 0, 0.3); border-radius: 10px; padding: 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.4; color: #cbd5e1;">
@@ -86,19 +110,19 @@ function openInAppLaunchModal() {
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div>
           <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Coin Name</label>
-          <input id="launchit-name-input" type="text" value="${data.title}" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px;" />
+          <input id="launchit-name-input" type="text" value="${data.title}" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 13px;" />
         </div>
 
         <div>
           <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Ticker Symbol</label>
-          <input id="launchit-ticker-input" type="text" value="$${data.ticker}" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 8px 12px; color: #ff8c37; font-size: 14px; font-weight: 700; font-family: monospace;" />
+          <input id="launchit-ticker-input" type="text" value="$${data.ticker}" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #ff8c37; font-size: 14px; font-weight: 700; font-family: monospace;" />
         </div>
 
-        <button id="launchit-deploy-btn" style="margin-top: 8px; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, #ff6000 0%, #ff8c37 100%); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 96, 0, 0.4);">
+        <button id="launchit-deploy-btn" style="margin-top: 8px; padding: 14px; border-radius: 10px; border: none; background: linear-gradient(135deg, #ff6000 0%, #ff8c37 100%); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 20px rgba(255, 96, 0, 0.5);">
           Launch Coin on Solana 🐆
         </button>
 
-        <div id="launchit-status-area" style="display: none; margin-top: 8px; padding: 10px; border-radius: 8px; background: rgba(20, 241, 149, 0.15); border: 1px solid #14f195; font-size: 12px; color: #14f195; text-align: center;"></div>
+        <div id="launchit-status-area" style="display: none; margin-top: 10px; padding: 12px; border-radius: 10px; background: rgba(20, 241, 149, 0.15); border: 1px solid #14f195; font-size: 13px; color: #14f195; text-align: center;"></div>
       </div>
     </div>
   `;
@@ -127,12 +151,13 @@ function openInAppLaunchModal() {
         status.style.display = "block";
         status.innerHTML = `
           🎉 <b>$${tickerVal} is LIVE on Solana!</b><br/>
-          <a href="${tokenUrl}" target="_blank" style="color: #00f0ff; text-decoration: underline; display: block; margin-top: 6px;">View on LaunchIt Curve &rarr;</a>
+          <a href="${tokenUrl}" target="_blank" style="color: #00f0ff; text-decoration: underline; display: block; margin-top: 8px; font-weight: 700;">Open on LaunchIt Curve &rarr;</a>
         `;
       }
     }, 1200);
   });
 }
 
-// Run injection every 1.5 seconds to cover dynamic video scrolling
-setInterval(injectLaunchItButton, 1500);
+// Check every 1 second to cover fast TikTok video scrolling
+setInterval(injectLaunchItUI, 1000);
+injectLaunchItUI();
