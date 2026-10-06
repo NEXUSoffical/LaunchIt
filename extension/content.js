@@ -7,8 +7,8 @@ console.log("🐆 LaunchIt TikTok Extension active!");
 
 let loginCompletedDispatched = false;
 
-// Auto-close login popup once login completes so video feed never plays
-if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
+// Monitor login popup window once login completes
+if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.innerWidth <= 650) {
   const getUsernameFromPage = async () => {
     // 1. Direct profile URL
     if (window.location.pathname.startsWith("/@")) {
@@ -86,9 +86,6 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
       try {
         chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED", username: u });
       } catch (_) {}
-      setTimeout(() => {
-        try { window.close(); } catch (_) {}
-      }, 400);
     }
   };
 

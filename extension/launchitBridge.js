@@ -66,9 +66,23 @@ window.addEventListener("message", (event) => {
       });
     } catch (_) {}
   }
+
+  if (event.data?.type === "LAUNCHIT_OPEN_TIKTOK_LOGIN") {
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: "OPEN_TIKTOK_LOGIN",
+          expectedHandle: event.data.expectedHandle
+        },
+        (response) => {
+          window.postMessage({ type: "LAUNCHIT_OPEN_LOGIN_RESULT", ...response }, "*");
+        }
+      );
+    } catch (_) {}
+  }
 });
 
-// Listen for push notifications from background (e.g. login completed)
+// Listen for push notifications from background (e.g. login completed, wrong account)
 try {
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === "TIKTOK_LOGIN_COMPLETED") {
@@ -76,6 +90,16 @@ try {
         {
           type: "LAUNCHIT_TIKTOK_LOGIN_COMPLETED",
           username: message.username
+        },
+        "*"
+      );
+    }
+    if (message?.type === "TIKTOK_WRONG_ACCOUNT") {
+      window.postMessage(
+        {
+          type: "LAUNCHIT_TIKTOK_WRONG_ACCOUNT",
+          detected: message.detected,
+          expected: message.expected
         },
         "*"
       );

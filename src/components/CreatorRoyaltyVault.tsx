@@ -50,25 +50,31 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
     const cleanExpected = creatorHandle.replace("@", "").trim();
 
-    // 1. Open TikTok Login popup centered
-    const width = 550;
-    const height = 750;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    const popup = window.open(
-      "https://www.tiktok.com/login",
-      "TikTokLogin",
-      `width=${width},height=${height},top=${top},left=${left}`
-    );
+    // 1. Tell extension to wipe TikTok cookies & open clean login popup so user is NEVER auto-signed into the wrong account
+    window.postMessage({ type: "LAUNCHIT_OPEN_TIKTOK_LOGIN", expectedHandle: cleanExpected }, "*");
 
-    // 2. Setup watcher: ONLY verify when login has actually completed!
     let loginCompleted = false;
-    let checkInterval: any = null;
+    let fallbackPopup: any = null;
 
-    const cleanup = () => {
-      if (checkInterval) clearInterval(checkInterval);
-      window.removeEventListener("message", onMessage);
+    // Fallback: in case extension is reloading, attempt window.open after delay
+    const fallbackTimer = setTimeout(() => {
+      const width = 550;
+      const height = 750;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      fallbackPopup = window.open(
+        "https://www.tiktok.com/login",
+        "TikTokLogin",
+        `width=${width},height=${height},top=${top},left=${left}`
+      );
+    }, 1200);
+
+    const onLoginResult = (e: MessageEvent) => {
+      if (e.data?.type === "LAUNCHIT_OPEN_LOGIN_RESULT" && e.data?.success) {
+        clearTimeout(fallbackTimer);
+      }
     };
+    window.addEventListener("message", onLoginResult);
 
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === "LAUNCHIT_TIKTOK_LOGIN_COMPLETED") {
@@ -76,8 +82,10 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         if (!detected) return;
 
         loginCompleted = true;
-        cleanup();
-        try { if (popup && !popup.closed) popup.close(); } catch (_) {}
+        clearTimeout(fallbackTimer);
+        window.removeEventListener("message", onMessage);
+        window.removeEventListener("message", onLoginResult);
+        try { if (fallbackPopup && !fallbackPopup.closed) fallbackPopup.close(); } catch (_) {}
         setIsVerifying(false);
 
         if (detected === cleanExpected.toLowerCase()) {
@@ -91,27 +99,39 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
           );
         }
       }
+
+      if (event.data?.type === "LAUNCHIT_TIKTOK_WRONG_ACCOUNT") {
+        const detected = (event.data.detected || "").toLowerCase().trim();
+        setIsVerifying(false);
+        setAuthError(
+          `Wrong account detected (@${detected}). TikTok session was wiped. Please enter login credentials for ${creatorHandle} in the login window.`
+        );
+      }
     };
 
     window.addEventListener("message", onMessage);
 
-    // Watch for popup close: perform one check upon closure
-    checkInterval = setInterval(() => {
-      if (!popup || popup.closed) {
-        cleanup();
+    // Watch for fallback popup close
+    const checkInterval = setInterval(() => {
+      if (fallbackPopup && fallbackPopup.closed) {
+        clearInterval(checkInterval);
+        clearTimeout(fallbackTimer);
+        window.removeEventListener("message", onMessage);
+        window.removeEventListener("message", onLoginResult);
         if (!loginCompleted && !isTikTokVerified) {
           handleDirectVerify();
-        } else {
-          setIsVerifying(false);
         }
       }
     }, 600);
 
     // Timeout safety
     setTimeout(() => {
-      cleanup();
+      clearInterval(checkInterval);
+      clearTimeout(fallbackTimer);
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("message", onLoginResult);
       setIsVerifying(false);
-    }, 120000);
+    }, 180000);
   };
 
   const handleDirectVerify = () => {
@@ -166,11 +186,12 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const handleLogoutTikTok = () => {
     setAuthError(null);
     setIsVerifying(true);
+    setIsTikTokVerified(false);
+    setVerifiedHandle(null);
     window.postMessage({ type: "LAUNCHIT_REQUEST_LOGOUT" }, "*");
     setTimeout(() => {
-      setIsVerifying(false);
-      setAuthError(`Logged out of TikTok session. Click "Sign in with TikTok" to sign into ${creatorHandle}.`);
-    }, 600);
+      handleOpenTikTokSignIn();
+    }, 400);
   };
 
   const handleClaim = () => {
@@ -467,6 +488,24 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                           <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
                         </svg>
                         <span>{isVerifying ? "Waiting for Sign In..." : "Sign in with TikTok"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleLogoutTikTok}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#94a3b8",
+                          fontSize: "0.78rem",
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                          padding: "6px 0",
+                          textAlign: "center",
+                          width: "100%",
+                        }}
+                      >
+                        Signed into wrong TikTok account? Click here to switch account
                       </button>
                     </div>
                   </div>

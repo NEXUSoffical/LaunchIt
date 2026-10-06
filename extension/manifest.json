@@ -13,14 +13,17 @@
     "notifications",
     "activeTab",
     "cookies",
+    "browsingData",
     "scripting",
     "tabs"
   ],
   "host_permissions": [
-    "https://www.tiktok.com/*",
+    "*://*.tiktok.com/*",
+    "*://tiktok.com/*",
     "https://launchit.world/*",
     "https://api.devnet.solana.com/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -31,12 +34,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.tiktok.com/*"],
+      "matches": ["*://*.tiktok.com/*", "*://tiktok.com/*"],
       "js": ["content.js"],
       "css": ["content.css"]
     },
     {
-      "matches": ["https://launchit.world/*", "http://localhost/*"],
+      "matches": ["https://launchit.world/*", "http://localhost/*", "http://127.0.0.1/*"],
       "js": ["launchitBridge.js"]
     }
   ]

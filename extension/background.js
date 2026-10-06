@@ -3,6 +3,85 @@
  * Real TikTok Authentication & Identity Verification
  */
 
+async function clearAllTikTokSession() {
+  // 1. Clear browsing data (cache, cookies, localStorage, indexedDB, serviceWorkers)
+  try {
+    if (chrome.browsingData && chrome.browsingData.remove) {
+      await chrome.browsingData.remove(
+        {
+          origins: [
+            "https://www.tiktok.com",
+            "https://tiktok.com",
+            "https://passport.tiktok.com",
+            "https://m.tiktok.com",
+            "https://login.tiktok.com"
+          ]
+        },
+        {
+          cache: true,
+          cookies: true,
+          localStorage: true,
+          indexedDB: true,
+          serviceWorkers: true
+        }
+      );
+    }
+  } catch (e) {
+    console.warn("browsingData.remove error:", e);
+  }
+
+  // 2. Comprehensive cookie wiping across all cookies matching tiktok or bytedance
+  try {
+    const allCookies = await chrome.cookies.getAll({});
+    for (const c of allCookies) {
+      if (
+        c.domain.includes("tiktok.com") ||
+        c.domain.includes("bytedance.com") ||
+        c.domain.includes("byteoversea.com")
+      ) {
+        const protocol = c.secure ? "https://" : "http://";
+        const domainClean = c.domain.startsWith(".") ? c.domain.slice(1) : c.domain;
+        try {
+          await chrome.cookies.remove({
+            url: `${protocol}${domainClean}${c.path}`,
+            name: c.name,
+            storeId: c.storeId
+          });
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.warn("cookie wiping error:", e);
+  }
+
+  // 3. Clear cookies by exact URL endpoints
+  const urls = [
+    "https://www.tiktok.com/",
+    "https://tiktok.com/",
+    "https://passport.tiktok.com/",
+    "https://m.tiktok.com/",
+    "https://login.tiktok.com/"
+  ];
+  for (const url of urls) {
+    try {
+      const cookies = await chrome.cookies.getAll({ url });
+      for (const c of cookies) {
+        try {
+          await chrome.cookies.remove({ url, name: c.name, storeId: c.storeId });
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  // 4. Invalidate session on TikTok's server
+  try {
+    await fetch("https://www.tiktok.com/passport/web/account/logout/", {
+      credentials: "include",
+      headers: { Accept: "application/json" }
+    });
+  } catch (_) {}
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "TIKTOK_LOGIN_COMPLETED") {
     const username = (request.username || "").trim().toLowerCase();
@@ -13,7 +92,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     // Broadcast to any LaunchIt tabs
     try {
-      chrome.tabs.query({ url: ["https://launchit.world/*", "http://localhost/*"] }, (tabs) => {
+      chrome.tabs.query({ url: ["https://launchit.world/*", "http://localhost/*", "http://127.0.0.1/*"] }, (tabs) => {
         for (const t of tabs || []) {
           if (t.id) {
             chrome.tabs.sendMessage(t.id, {
@@ -27,27 +106,117 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return;
   }
 
+  if (request.type === "OPEN_TIKTOK_LOGIN") {
+    (async () => {
+      try {
+        const expected = (request.expectedHandle || "").replace("@", "").trim().toLowerCase();
+
+        // 1. Clear all existing sessions so user is NEVER locked into the wrong account or greeted with "Already logged in"
+        await clearAllTikTokSession();
+
+        // 2. Open clean login popup
+        const win = await chrome.windows.create({
+          url: "https://www.tiktok.com/login",
+          type: "popup",
+          width: 550,
+          height: 750,
+          focused: true
+        });
+
+        const tabId = win?.tabs?.[0]?.id;
+
+        // 3. Monitor login popup navigation to verify when login is completed
+        if (tabId) {
+          const tabListener = async (updatedTabId, changeInfo, tab) => {
+            if (updatedTabId !== tabId) return;
+
+            if (changeInfo.status === "complete" && tab.url) {
+              const url = tab.url.toLowerCase();
+              if (url.includes("/login") || url.includes("/signup")) {
+                return; // User is entering credentials
+              }
+
+              // Navigated away from login screen! Check logged in account
+              try {
+                const results = await chrome.scripting.executeScript({
+                  target: { tabId },
+                  func: async () => {
+                    try {
+                      const res = await fetch("/passport/web/account/info/", { credentials: "include" });
+                      if (res.ok) {
+                        const d = await res.json();
+                        const u = d?.data?.username || d?.data?.screen_name || d?.data?.unique_id;
+                        if (u && typeof u === "string" && !u.includes("session")) return u.trim();
+                      }
+                    } catch (_) {}
+                    return null;
+                  }
+                });
+
+                const loggedInUser = (results?.[0]?.result || "").toLowerCase().trim();
+                if (loggedInUser) {
+                  if (expected && loggedInUser !== expected) {
+                    // Mismatched account! Wipe session and return to login screen
+                    await clearAllTikTokSession();
+                    chrome.tabs.update(tabId, { url: "https://www.tiktok.com/login" }).catch(() => {});
+                    chrome.tabs.query({ url: ["https://launchit.world/*", "http://localhost/*", "http://127.0.0.1/*"] }, (tabs) => {
+                      for (const t of tabs || []) {
+                        if (t.id) {
+                          chrome.tabs.sendMessage(t.id, {
+                            type: "TIKTOK_WRONG_ACCOUNT",
+                            detected: loggedInUser,
+                            expected: expected
+                          }).catch(() => {});
+                        }
+                      }
+                    });
+                    return;
+                  }
+
+                  // Login matched! Close window and broadcast
+                  chrome.tabs.onUpdated.removeListener(tabListener);
+                  chrome.windows.remove(win.id).catch(() => {});
+
+                  chrome.tabs.query({ url: ["https://launchit.world/*", "http://localhost/*", "http://127.0.0.1/*"] }, (tabs) => {
+                    for (const t of tabs || []) {
+                      if (t.id) {
+                        chrome.tabs.sendMessage(t.id, {
+                          type: "TIKTOK_LOGIN_COMPLETED",
+                          username: loggedInUser
+                        }).catch(() => {});
+                      }
+                    }
+                  });
+                }
+              } catch (_) {}
+            }
+          };
+
+          chrome.tabs.onUpdated.addListener(tabListener);
+
+          chrome.windows.onRemoved.addListener(function onWinRemoved(closedWinId) {
+            if (closedWinId === win.id) {
+              chrome.tabs.onUpdated.removeListener(tabListener);
+              chrome.windows.onRemoved.removeListener(onWinRemoved);
+            }
+          });
+        }
+
+        sendResponse({ success: true, windowId: win?.id });
+      } catch (err) {
+        sendResponse({ success: false, error: err?.message });
+      }
+    })();
+    return true;
+  }
+
   if (request.type === "LOGOUT_TIKTOK") {
     (async () => {
       try {
-        lastVerifiedTikTokUsername = "";
-        const domains = [".tiktok.com", "tiktok.com", ".www.tiktok.com", "www.tiktok.com"];
-        for (const domain of domains) {
-          try {
-            const cookies = await chrome.cookies.getAll({ domain });
-            for (const c of cookies) {
-              try {
-                await chrome.cookies.remove({
-                  url: (c.secure ? "https://" : "http://") + c.domain.replace(/^\./, "") + c.path,
-                  name: c.name
-                });
-              } catch (_) {}
-            }
-          } catch (_) {}
-        }
+        await clearAllTikTokSession();
         sendResponse({ success: true });
       } catch (err) {
-        sendResponse({ success: false, error: err.message });
+        sendResponse({ success: false, error: err?.message });
       }
     })();
     return true;
