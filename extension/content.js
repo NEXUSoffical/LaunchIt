@@ -5,6 +5,21 @@
 
 console.log("🐆 LaunchIt TikTok Extension active!");
 
+// Auto-close login popup once login completes so video feed never plays
+if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
+  const checkLoginRedirect = () => {
+    const path = window.location.pathname;
+    if (path.includes("/foryou") || path.startsWith("/@") || (path === "/" && document.cookie.includes("sessionid"))) {
+      try {
+        chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED" });
+      } catch (_) {}
+      window.close();
+    }
+  };
+  checkLoginRedirect();
+  setInterval(checkLoginRedirect, 500);
+}
+
 function injectLaunchItUI() {
   // 1. Inject Floating LaunchIt Widget in bottom corner if not present
   if (!document.querySelector(".launchit-floating-widget")) {

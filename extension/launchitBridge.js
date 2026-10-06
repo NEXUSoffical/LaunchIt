@@ -9,30 +9,53 @@ window.addEventListener("message", (event) => {
   if (event.data?.type === "LAUNCHIT_REQUEST_TIKTOK_AUTH") {
     const expectedHandle = event.data.expectedHandle;
 
-    chrome.runtime.sendMessage(
-      { type: "CHECK_TIKTOK_AUTH", expectedHandle },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          window.postMessage(
-            {
-              type: "LAUNCHIT_TIKTOK_AUTH_RESULT",
-              success: false,
-              error: "LaunchIt extension communication error. Ensure extension is enabled."
-            },
-            "*"
-          );
-          return;
-        }
-
+    try {
+      if (!chrome.runtime?.id) {
         window.postMessage(
           {
             type: "LAUNCHIT_TIKTOK_AUTH_RESULT",
-            ...response
+            success: false,
+            error: "LaunchIt extension was updated. Please refresh this page to reconnect."
           },
           "*"
         );
+        return;
       }
-    );
+
+      chrome.runtime.sendMessage(
+        { type: "CHECK_TIKTOK_AUTH", expectedHandle },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage(
+              {
+                type: "LAUNCHIT_TIKTOK_AUTH_RESULT",
+                success: false,
+                error: chrome.runtime.lastError.message || "LaunchIt extension communication error."
+              },
+              "*"
+            );
+            return;
+          }
+
+          window.postMessage(
+            {
+              type: "LAUNCHIT_TIKTOK_AUTH_RESULT",
+              ...response
+            },
+            "*"
+          );
+        }
+      );
+    } catch (e) {
+      window.postMessage(
+        {
+          type: "LAUNCHIT_TIKTOK_AUTH_RESULT",
+          success: false,
+          error: "Extension communication error. Please refresh the page."
+        },
+        "*"
+      );
+    }
   }
 });
 

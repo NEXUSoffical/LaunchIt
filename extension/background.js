@@ -4,6 +4,13 @@
  */
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "TIKTOK_LOGIN_COMPLETED") {
+    if (sender?.tab?.id) {
+      chrome.tabs.remove(sender.tab.id).catch(() => {});
+    }
+    return;
+  }
+
   if (request.type === "CHECK_TIKTOK_AUTH") {
     const expected = (request.expectedHandle || "").replace("@", "").trim().toLowerCase();
 

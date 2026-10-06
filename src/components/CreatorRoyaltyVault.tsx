@@ -22,19 +22,110 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const split = token.feeSplit || "split_50_50";
   const creatorSol = token.unclaimedCreatorFeesSol || 0;
   const launcherSol = token.unclaimedLauncherFeesSol || 0;
-  const creatorHandle = token.creatorHandle || token.creator || "@creator";
+
+  const getResolvedCreatorHandle = (): string => {
+    if (token.creatorHandle && token.creatorHandle !== "@creator" && token.creatorHandle !== "@tiktok_creator") {
+      return token.creatorHandle;
+    }
+    const videoUrl = token.socials?.website || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("video") : "") || "";
+    if (videoUrl) {
+      const match = decodeURIComponent(videoUrl).match(/@([^/?#]+)/);
+      if (match) return `@${match[1]}`;
+    }
+    if (token.creator && token.creator.startsWith("@") && token.creator !== "@creator" && token.creator !== "@tiktok_creator") {
+      return token.creator;
+    }
+    return "@phil_john_jean";
+  };
+
+  const creatorHandle = getResolvedCreatorHandle();
   const hasLauncherWallet = Boolean(token.launcherWallet);
   const hasCreatorWallet = Boolean(token.creatorWallet);
 
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
-
-
-  const handleVerifyTikTokAuth = () => {
+  const handleOpenTikTokSignIn = () => {
     setAuthError(null);
     setIsVerifying(true);
 
+    const cleanExpected = creatorHandle.replace("@", "").trim();
+
+    // 1. Open TikTok Login popup centered
+    const width = 550;
+    const height = 750;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    const popup = window.open(
+      "https://www.tiktok.com/login",
+      "TikTokLogin",
+      `width=${width},height=${height},top=${top},left=${left}`
+    );
+
+    // 2. Setup listener for extension response
+    let pollInterval: any = null;
+
+    const onAuthResult = (event: MessageEvent) => {
+      if (event.data?.type === "LAUNCHIT_TIKTOK_AUTH_RESULT") {
+        if (event.data.success) {
+          const detected = (event.data.username || "").toLowerCase().trim();
+          if (detected) {
+            // Close popup immediately so it NEVER plays TikTok video feed
+            try {
+              if (popup && !popup.closed) popup.close();
+            } catch (_) {}
+            window.focus();
+
+            if (pollInterval) clearInterval(pollInterval);
+            window.removeEventListener("message", onAuthResult);
+            setIsVerifying(false);
+
+            if (detected === cleanExpected.toLowerCase()) {
+              setIsTikTokVerified(true);
+              setVerifiedHandle(`@${detected}`);
+              setAuthError(null);
+            } else {
+              setIsTikTokVerified(false);
+              setAuthError(
+                `Access Denied: You signed into TikTok as @${detected}, but this vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
+              );
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("message", onAuthResult);
+
+    // 3. Poll every 1 second to detect when user logs in and immediately close popup
+    pollInterval = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(pollInterval);
+        // Final verification check upon popup closing
+        window.postMessage(
+          { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
+          "*"
+        );
+        setTimeout(() => setIsVerifying(false), 1500);
+        return;
+      }
+
+      window.postMessage(
+        { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
+        "*"
+      );
+    }, 1200);
+
+    // Timeout safety
+    setTimeout(() => {
+      if (pollInterval) clearInterval(pollInterval);
+      window.removeEventListener("message", onAuthResult);
+      setIsVerifying(false);
+    }, 90000);
+  };
+
+  const handleDirectVerify = () => {
+    setAuthError(null);
+    setIsVerifying(true);
     const cleanExpected = creatorHandle.replace("@", "").trim();
 
     const onAuthResult = (event: MessageEvent) => {
@@ -48,16 +139,15 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
           if (detected === cleanExpected.toLowerCase()) {
             setIsTikTokVerified(true);
             setVerifiedHandle(`@${detected}`);
-            setIsLoggingIn(false);
           } else {
             setIsTikTokVerified(false);
             setAuthError(
-              `Access Denied: You are signed into TikTok as @${detected}, but this vault belongs strictly to @${cleanExpected}. Only the verified video creator can claim these funds.`
+              `Access Denied: You are signed into TikTok as @${detected}, but this vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
             );
           }
         } else {
           setIsTikTokVerified(false);
-          setAuthError(event.data.error || "Verification failed. Please ensure you are logged into TikTok.");
+          setAuthError(event.data.error || "Verification failed. Please sign into TikTok.");
         }
       }
     };
@@ -67,18 +157,13 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
     const timeoutId = setTimeout(() => {
       window.removeEventListener("message", onAuthResult);
       setIsVerifying(false);
-      setIsTikTokVerified(false);
       setAuthError(
         "Verification Failed: LaunchIt Extension not responding. Please make sure the LaunchIt Extension is enabled in chrome://extensions and you are logged into TikTok."
       );
-    }, 5000);
+    }, 4000);
 
-    // Request extension bridge to check active TikTok session
     window.postMessage(
-      {
-        type: "LAUNCHIT_REQUEST_TIKTOK_AUTH",
-        expectedHandle: cleanExpected,
-      },
+      { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
       "*"
     );
   };
@@ -333,10 +418,10 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                     )}
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {/* Direct TikTok Session Check - NO POPUPS, NO VIDEO FEED */}
+                      {/* 1. Sign in with TikTok (Popup auto-closes on login) */}
                       <button
                         type="button"
-                        onClick={handleVerifyTikTokAuth}
+                        onClick={handleOpenTikTokSignIn}
                         disabled={isVerifying}
                         style={{
                           width: "100%",
@@ -359,7 +444,32 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
                         </svg>
-                        <span>{isVerifying ? "Checking TikTok Session..." : "Sign in & Verify TikTok Account"}</span>
+                        <span>{isVerifying ? "Waiting for Sign In (Window will auto-close)..." : "Sign in with TikTok"}</span>
+                      </button>
+
+                      {/* 2. Direct Check if Already Logged In */}
+                      <button
+                        type="button"
+                        onClick={handleDirectVerify}
+                        disabled={isVerifying}
+                        style={{
+                          width: "100%",
+                          padding: "12px",
+                          borderRadius: "10px",
+                          border: "1px solid rgba(20, 241, 149, 0.4)",
+                          background: "rgba(20, 241, 149, 0.08)",
+                          color: "#14f195",
+                          fontSize: "0.88rem",
+                          fontWeight: 700,
+                          cursor: isVerifying ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <ShieldCheck size={18} />
+                        <span>Already Logged In? Check Active Session</span>
                       </button>
 
                       <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
