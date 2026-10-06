@@ -5,12 +5,16 @@
 
 console.log("🐆 LaunchIt TikTok Extension active!");
 
+let loginCompletedDispatched = false;
+
 // Auto-close login popup once login completes so video feed never plays
 if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
   const getUsernameFromPage = () => {
     if (window.location.pathname.startsWith("/@")) {
       const u = window.location.pathname.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
-      if (u) return u;
+      if (u && !["foryou", "live", "explore", "following", "friends"].includes(u.toLowerCase())) {
+        return u;
+      }
     }
     const selectors = [
       'a[data-e2e="profile-icon"]',
@@ -35,25 +39,34 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
   };
 
   const checkLoginRedirect = () => {
+    if (loginCompletedDispatched) return;
     const path = window.location.pathname;
-    // CRITICAL: NEVER close while user is on /login or /signup
+
+    // While on /login or /signup, DO NOT CLOSE
     if (path.includes("/login") || path.includes("/signup")) {
       return;
     }
 
-    // Once redirected to feed, profile, or home with session:
-    if (path.includes("/foryou") || path.startsWith("/@") || (path === "/" && (document.cookie.includes("sessionid") || document.cookie.includes("sid_tt")))) {
-      const u = getUsernameFromPage();
+    // ONLY consider login completed if a REAL USERNAME is actually detected on the page!
+    const u = getUsernameFromPage();
+    if (u) {
+      loginCompletedDispatched = true;
       try {
         chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED", username: u });
       } catch (_) {}
       setTimeout(() => {
         try { window.close(); } catch (_) {}
-      }, 350);
+      }, 500);
     }
   };
-  checkLoginRedirect();
-  setInterval(checkLoginRedirect, 500);
+
+  const timer = setInterval(() => {
+    if (loginCompletedDispatched) {
+      clearInterval(timer);
+      return;
+    }
+    checkLoginRedirect();
+  }, 1000);
 }
 
 

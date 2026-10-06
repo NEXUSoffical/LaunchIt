@@ -61,8 +61,8 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
       `width=${width},height=${height},top=${top},left=${left}`
     );
 
-    // 2. Setup watcher: DO NOT close popup manually while user is typing!
-    // Popup will auto-close when TikTok redirects after successful login, or user closes it.
+    // 2. Setup watcher: ONLY verify when login has actually completed!
+    let loginCompleted = false;
     let checkInterval: any = null;
 
     const cleanup = () => {
@@ -72,19 +72,34 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === "LAUNCHIT_TIKTOK_LOGIN_COMPLETED") {
+        const detected = (event.data.username || "").toLowerCase().trim();
+        if (!detected) return;
+
+        loginCompleted = true;
         cleanup();
-        setTimeout(() => handleDirectVerify(), 400);
+        try { if (popup && !popup.closed) popup.close(); } catch (_) {}
+        setIsVerifying(false);
+
+        if (detected === cleanExpected.toLowerCase()) {
+          setIsTikTokVerified(true);
+          setVerifiedHandle(`@${detected}`);
+          setAuthError(null);
+        } else {
+          setIsTikTokVerified(false);
+          setAuthError(
+            `Access Denied: You signed into TikTok as @${detected}, but this royalty vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
+          );
+        }
       }
     };
 
     window.addEventListener("message", onMessage);
 
-    // Watch for popup close event
+    // Watch for popup close: if closed without login, NEVER auto-sign in!
     checkInterval = setInterval(() => {
       if (!popup || popup.closed) {
         cleanup();
-        // Popup has closed! Now perform strict TikTok verification check
-        setTimeout(() => handleDirectVerify(), 500);
+        setIsVerifying(false);
       }
     }, 500);
 

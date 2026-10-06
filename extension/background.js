@@ -3,13 +3,11 @@
  * Real TikTok Authentication & Identity Verification
  */
 
-let lastVerifiedTikTokUsername = "";
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "TIKTOK_LOGIN_COMPLETED") {
-    if (request.username) {
-      lastVerifiedTikTokUsername = request.username.toLowerCase().trim();
-    }
+    const username = (request.username || "").trim().toLowerCase();
+    if (!username) return;
+
     if (sender?.tab?.id) {
       chrome.tabs.remove(sender.tab.id).catch(() => {});
     }
@@ -20,7 +18,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (t.id) {
             chrome.tabs.sendMessage(t.id, {
               type: "TIKTOK_LOGIN_COMPLETED",
-              username: request.username || lastVerifiedTikTokUsername
+              username: username
             }).catch(() => {});
           }
         }
@@ -176,12 +174,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           } catch (_) {}
         }
 
-        // 5. Fallback to cached login username from last completed login event
-        if (!detectedUsername && lastVerifiedTikTokUsername) {
-          detectedUsername = lastVerifiedTikTokUsername;
-        }
-
-        // 6. Validate detection result
+        // 5. Validate detection result
         if (!detectedUsername) {
           sendResponse({
             success: false,
