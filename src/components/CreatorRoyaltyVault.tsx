@@ -418,7 +418,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                     )}
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {/* 1. Sign in with TikTok (Popup auto-closes on login) */}
+                      {/* One Single Action: Sign in with TikTok */}
                       <button
                         type="button"
                         onClick={handleOpenTikTokSignIn}
@@ -444,44 +444,31 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
                         </svg>
-                        <span>{isVerifying ? "Waiting for Sign In (Window will auto-close)..." : "Sign in with TikTok"}</span>
+                        <span>{isVerifying ? "Waiting for Sign In (Window auto-closes on login)..." : "Sign in with TikTok"}</span>
                       </button>
 
-                      {/* 2. Direct Check if Already Logged In */}
-                      <button
-                        type="button"
-                        onClick={handleDirectVerify}
-                        disabled={isVerifying}
-                        style={{
-                          width: "100%",
-                          padding: "12px",
-                          borderRadius: "10px",
-                          border: "1px solid rgba(20, 241, 149, 0.4)",
-                          background: "rgba(20, 241, 149, 0.08)",
-                          color: "#14f195",
-                          fontSize: "0.88rem",
-                          fontWeight: 700,
-                          cursor: isVerifying ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <ShieldCheck size={18} />
-                        <span>Already Logged In? Check Active Session</span>
-                      </button>
-
+                      {/* Silent 1-Click Logout: Clears TikTok cookies in background without taking user to TikTok */}
                       <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span>Logged into a different account?</span>
-                        <a
-                          href="https://www.tiktok.com/logout"
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ color: "#ff8c37", fontWeight: 600, textDecoration: "underline" }}
+                        <span>Logged into a different TikTok account?</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthError(null);
+                            window.postMessage({ type: "LAUNCHIT_REQUEST_LOGOUT" }, "*");
+                            setAuthError("Logged out of TikTok session. Click Sign in with TikTok to sign in.");
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#ff8c37",
+                            cursor: "pointer",
+                            fontWeight: 700,
+                            textDecoration: "underline",
+                            padding: 0,
+                          }}
                         >
-                          Log Out to Switch ↗
-                        </a>
+                          Log Out to Switch Account
+                        </button>
                       </div>
                     </div>
                   </div>

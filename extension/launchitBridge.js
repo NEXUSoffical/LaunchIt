@@ -56,6 +56,12 @@ window.addEventListener("message", (event) => {
         "*"
       );
     }
+  if (event.data?.type === "LAUNCHIT_REQUEST_LOGOUT") {
+    try {
+      chrome.runtime.sendMessage({ type: "LOGOUT_TIKTOK" }, (response) => {
+        window.postMessage({ type: "LAUNCHIT_LOGOUT_RESULT", ...response }, "*");
+      });
+    } catch (_) {}
   }
 });
 

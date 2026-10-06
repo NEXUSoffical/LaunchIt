@@ -11,6 +11,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return;
   }
 
+  if (request.type === "LOGOUT_TIKTOK") {
+    (async () => {
+      try {
+        const cookies = await chrome.cookies.getAll({ domain: ".tiktok.com" });
+        for (const c of cookies) {
+          try {
+            await chrome.cookies.remove({
+              url: (c.secure ? "https://" : "http://") + c.domain.replace(/^\./, "") + c.path,
+              name: c.name
+            });
+          } catch (_) {}
+        }
+        sendResponse({ success: true });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
   if (request.type === "CHECK_TIKTOK_AUTH") {
     const expected = (request.expectedHandle || "").replace("@", "").trim().toLowerCase();
 
