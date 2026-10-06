@@ -9,13 +9,45 @@ let loginCompletedDispatched = false;
 
 // Auto-close login popup once login completes so video feed never plays
 if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
-  const getUsernameFromPage = () => {
+  const getUsernameFromPage = async () => {
+    // 1. Direct profile URL
     if (window.location.pathname.startsWith("/@")) {
       const u = window.location.pathname.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
       if (u && !["foryou", "live", "explore", "following", "friends"].includes(u.toLowerCase())) {
         return u;
       }
     }
+
+    // 2. Same-origin fetch inside TikTok (always has session cookies and bypasses overlays)
+    try {
+      const res = await fetch("/passport/web/account/info/", {
+        credentials: "include",
+        headers: { "Accept": "application/json" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const pUser = data?.data?.username || data?.data?.screen_name || data?.data?.unique_id;
+        if (pUser && typeof pUser === "string" && !pUser.includes("session")) {
+          return pUser.toLowerCase().trim();
+        }
+      }
+    } catch (_) {}
+
+    // 3. Hydration script tag
+    try {
+      const el = document.getElementById("__UNIVERSAL_DATA_FOR_REHYDRATION__");
+      if (el) {
+        const data = JSON.parse(el.textContent || "{}");
+        const defaultScope = data?.["__DEFAULT_SCOPE__"] || {};
+        const pUser = defaultScope?.["webapp.user-detail"]?.userInfo?.user?.uniqueId ||
+                     defaultScope?.["webapp.app-context"]?.user?.uniqueId;
+        if (pUser && typeof pUser === "string" && !["foryou", "live", "explore"].includes(pUser.toLowerCase())) {
+          return pUser.toLowerCase().trim();
+        }
+      }
+    } catch (_) {}
+
+    // 4. DOM selectors
     const selectors = [
       'a[data-e2e="profile-icon"]',
       'a[data-e2e="nav-profile"]',
@@ -38,17 +70,17 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
     return "";
   };
 
-  const checkLoginRedirect = () => {
+  const checkLoginRedirect = async () => {
     if (loginCompletedDispatched) return;
     const path = window.location.pathname;
 
-    // While on /login or /signup, DO NOT CLOSE
+    // While explicitly on /login or /signup input screens without redirect, let user enter credentials
     if (path.includes("/login") || path.includes("/signup")) {
       return;
     }
 
-    // ONLY consider login completed if a REAL USERNAME is actually detected on the page!
-    const u = getUsernameFromPage();
+    // When on feed, home, or profile after redirect:
+    const u = await getUsernameFromPage();
     if (u) {
       loginCompletedDispatched = true;
       try {
@@ -56,7 +88,7 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
       } catch (_) {}
       setTimeout(() => {
         try { window.close(); } catch (_) {}
-      }, 500);
+      }, 400);
     }
   };
 
@@ -66,7 +98,7 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth") {
       return;
     }
     checkLoginRedirect();
-  }, 1000);
+  }, 800);
 }
 
 

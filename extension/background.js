@@ -99,7 +99,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             try {
               const results = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
-                func: () => {
+                func: async () => {
+                  try {
+                    const res = await fetch("/passport/web/account/info/", { credentials: "include" });
+                    if (res.ok) {
+                      const data = await res.json();
+                      const p = data?.data?.username || data?.data?.screen_name || data?.data?.unique_id;
+                      if (p && typeof p === "string" && !p.includes("session")) return p;
+                    }
+                  } catch (_) {}
+
                   const navSelectors = [
                     'a[data-e2e="profile-icon"]',
                     'a[data-e2e="nav-profile"]',

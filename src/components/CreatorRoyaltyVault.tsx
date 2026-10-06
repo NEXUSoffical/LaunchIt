@@ -95,13 +95,17 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
     window.addEventListener("message", onMessage);
 
-    // Watch for popup close: if closed without login, NEVER auto-sign in!
+    // Watch for popup close: perform one check upon closure
     checkInterval = setInterval(() => {
       if (!popup || popup.closed) {
         cleanup();
-        setIsVerifying(false);
+        if (!loginCompleted && !isTikTokVerified) {
+          handleDirectVerify();
+        } else {
+          setIsVerifying(false);
+        }
       }
-    }, 500);
+    }, 600);
 
     // Timeout safety
     setTimeout(() => {
