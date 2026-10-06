@@ -39,24 +39,30 @@ export class LaunchItSocialBot {
    * e.g. "@LaunchIt $CHILLGUY" or "@LaunchIt launch $DOGE"
    */
   public parseComment(comment: string): { ticker?: string; valid: boolean } {
-    const mentionRegex = /@LaunchIt\w*/i;
+    const mentionRegex = /@launchit\w*/i;
     if (!mentionRegex.test(comment)) {
       return { valid: false };
     }
 
-    // Extract ticker e.g. $NAME or ticker after 'launch'
+    // 1. Look for $TICKER
     const tickerMatch = comment.match(/\$([A-Za-z0-9_]{2,10})/);
     if (tickerMatch) {
       return { ticker: tickerMatch[1].toUpperCase(), valid: true };
     }
 
-    // Fallback: look for word after "launch"
+    // 2. Look for word after "launch"
     const launchWordMatch = comment.match(/launch\s+([A-Za-z0-9_]{2,10})/i);
     if (launchWordMatch) {
       return { ticker: launchWordMatch[1].toUpperCase(), valid: true };
     }
 
-    return { valid: true }; // valid mention, auto-generate ticker from video title
+    // 3. Look for any word right after the @mention (e.g. "@launchit4 SUNTZ")
+    const wordAfterMention = comment.match(/@launchit\w*\s+([A-Za-z0-9_]{2,10})/i);
+    if (wordAfterMention) {
+      return { ticker: wordAfterMention[1].toUpperCase(), valid: true };
+    }
+
+    return { ticker: "VIRAL", valid: true };
   }
 
   /**

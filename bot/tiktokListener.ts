@@ -134,7 +134,35 @@ export class TikTokListener {
 
     setInterval(async () => {
       if (!this.isRunning) return;
-      // In production loop, calls TikTok notification feed
+      try {
+        const resp = await fetch("https://www.tiktok.com/api/notice/multi/", {
+          headers: {
+            "Cookie": `sessionid=${this.config.sessionCookie}`,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://www.tiktok.com/",
+          },
+        });
+        if (resp.ok) {
+          const json: any = await resp.json();
+          const notices = json.notice_lists || [];
+          for (const list of notices) {
+            for (const item of (list.notice_array || [])) {
+              const text = item.comment?.text || item.content || "";
+              if (text && text.toLowerCase().includes(`@${this.config.botHandle.toLowerCase()}`)) {
+                await this.processComment({
+                  id: String(item.comment?.cid || item.nid || Math.random()),
+                  text,
+                  author: item.from_user?.nickname || "TikTok User",
+                  videoUrl: item.schema || `https://www.tiktok.com/@user/video/${item.aweme?.aweme_id}`,
+                  videoId: item.aweme?.aweme_id || "video",
+                });
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        // Keep polling even if transient network jitter
+      }
     }, this.config.pollIntervalMs);
   }
 

@@ -2,6 +2,28 @@ import { Token, Trade } from "../types";
 
 export const INITIAL_TOKENS: Token[] = [
   {
+    id: "tiktok-test",
+    mint: "GenTEST8v9k3L1mF5c0uW7aR2jX6nQ4pZ0sT8dY4bA1vC2e",
+    name: "Test Viral Coin",
+    symbol: "TEST",
+    description: "Launched directly from TikTok video: https://www.tiktok.com/@phil_john_jean/video/7693373843641060629 via LaunchIt Extension.",
+    image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
+    creator: "@phil_john_jean",
+    marketCapSol: 34.2,
+    marketCapUsd: 5130,
+    priceSol: 0.0000000342,
+    progressPercent: 6.8,
+    realSolReserves: 5.78,
+    realTokenReserves: 750_000_000,
+    volume24hSol: 12.4,
+    repliesCount: 3,
+    isGraduated: false,
+    createdAt: Date.now() - 300000,
+    socials: {
+      website: "https://www.tiktok.com/@phil_john_jean/video/7693373843641060629",
+    },
+  },
+  {
     id: "genesis-ai",
     mint: "GenX7K9pQ5bWmR4v1k8Zs3nLe2YtF6aC0uM4qD8jE1oP",
     name: "Genesis Autonomous Core",

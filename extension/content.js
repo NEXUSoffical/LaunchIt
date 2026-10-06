@@ -151,7 +151,7 @@ function openInAppLaunchModal() {
 
       setTimeout(() => {
         const fakeMint = "Gen" + Math.random().toString(36).substring(2, 8).toUpperCase() + Math.random().toString(36).substring(2, 8) + "Xv7";
-        const tokenUrl = "https://launchit.world/token/" + fakeMint;
+        const tokenUrl = "https://launchit.world/?new_token=1&mint=" + encodeURIComponent(fakeMint) + "&name=" + encodeURIComponent(currentName) + "&symbol=" + encodeURIComponent(currentTicker) + "&video=" + encodeURIComponent(data.url) + "&creator=" + encodeURIComponent(data.creator);
 
         deployBtn.style.display = "none";
         if (statusArea) {

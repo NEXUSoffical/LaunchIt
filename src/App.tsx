@@ -8,12 +8,96 @@ import { TradingTerminal } from "./components/TradingTerminal";
 import { CreateTokenModal } from "./components/CreateTokenModal";
 import { DeployGuideModal } from "./components/DeployGuideModal";
 
+const getInitialTokens = (): Token[] => {
+  try {
+    const saved = localStorage.getItem("launchit_tokens_db");
+    if (saved) {
+      const parsed: Token[] = JSON.parse(saved);
+      const map = new Map<string, Token>();
+      for (const t of parsed) map.set(t.mint, t);
+      for (const t of INITIAL_TOKENS) {
+        if (!map.has(t.mint)) map.set(t.mint, t);
+      }
+      return Array.from(map.values());
+    }
+  } catch (e) {
+    console.error("Failed to parse saved tokens", e);
+  }
+  return INITIAL_TOKENS;
+};
+
 export const App: React.FC = () => {
-  const [tokens, setTokens] = useState<Token[]>(INITIAL_TOKENS);
+  const [tokens, setTokens] = useState<Token[]>(getInitialTokens);
   const [trades, setTrades] = useState<Trade[]>(INITIAL_TRADES);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // Deep-link & TikTok Launch detection from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const newMint = params.get("mint") || params.get("token");
+    const newName = params.get("name");
+    const newSymbol = params.get("symbol");
+    const videoUrl = params.get("video");
+    const isNew = params.get("new_token") === "1" || params.get("created") === "1";
+
+    if (isNew && newMint && newName && newSymbol) {
+      const createdCoin: Token = {
+        id: `tiktok-${Date.now()}`,
+        mint: newMint,
+        name: newName,
+        symbol: newSymbol.toUpperCase().replace("$", ""),
+        description: videoUrl ? `Launched directly from TikTok: ${videoUrl}` : "Launched directly on LaunchIt via 1-click in-app.",
+        image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
+        creator: params.get("creator") || "@tiktok_creator",
+        marketCapSol: 32.5,
+        marketCapUsd: 4875,
+        priceSol: 0.0000000325,
+        progressPercent: 3.5,
+        realSolReserves: 2.97,
+        realTokenReserves: 770_000_000,
+        volume24hSol: 3.2,
+        repliesCount: 1,
+        isGraduated: false,
+        createdAt: Date.now(),
+        socials: {
+          website: videoUrl || undefined,
+        },
+      };
+
+      setTokens((prev) => {
+        const filtered = prev.filter((t) => t.mint !== newMint);
+        const updated = [createdCoin, ...filtered];
+        try {
+          localStorage.setItem("launchit_tokens_db", JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+
+      setSelectedToken(createdCoin);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      // Check path or query for token mint
+      let lookupMint = newMint;
+      if (!lookupMint && window.location.pathname.includes("/token/")) {
+        lookupMint = window.location.pathname.split("/token/")[1]?.split("/")[0];
+      }
+      if (lookupMint) {
+        const found = tokens.find(
+          (t) => t.mint.toLowerCase() === lookupMint?.toLowerCase() || t.symbol.toLowerCase() === lookupMint?.toLowerCase()
+        );
+        if (found) setSelectedToken(found);
+      }
+    }
+  }, []);
+
+  // Save tokens to localStorage whenever tokens list updates
+  useEffect(() => {
+    try {
+      localStorage.setItem("launchit_tokens_db", JSON.stringify(tokens));
+    } catch (_) {}
+  }, [tokens]);
 
   // Top trending token for King of the Hill
   const kingToken = tokens.find((t) => !t.isGraduated) || tokens[0];

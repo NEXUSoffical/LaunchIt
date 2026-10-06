@@ -1,6 +1,23 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { TikTokListener, TikTokConfig } from "./tiktokListener";
 
-// Read from environment variables or config
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Read .env if present
+const envPath = path.resolve(__dirname, ".env");
+if (fs.existsSync(envPath)) {
+  const lines = fs.readFileSync(envPath, "utf-8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [k, ...rest] = trimmed.split("=");
+    if (k) process.env[k.trim()] = rest.join("=").trim();
+  }
+}
+
 const config: TikTokConfig = {
   botHandle: process.env.TIKTOK_BOT_HANDLE || "launchit4",
   sessionCookie: process.env.TIKTOK_SESSION_COOKIE || "",
@@ -11,7 +28,6 @@ const config: TikTokConfig = {
 const listener = new TikTokListener(config);
 listener.start();
 
-// Handle graceful shutdown
 process.on("SIGINT", () => {
   console.log("Shutting down TikTok bot listener...");
   listener.stop();
