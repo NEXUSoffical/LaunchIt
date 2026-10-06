@@ -206,10 +206,18 @@ function openInAppLaunchModal() {
           statusArea.style.display = "block";
           statusArea.innerHTML = `
             🎉 <b>$` + currentTicker + ` is LIVE on Solana!</b><br/>
+            <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Opening on LaunchIt...</div>
             <a href="` + tokenUrl + `" target="_blank" style="color: #00f0ff; text-decoration: underline; display: block; margin-top: 8px; font-weight: 700;">Open on LaunchIt Curve &rarr;</a>
           `;
         }
-      }, 1200);
+
+        // Automatically open the live coin in a new tab
+        try {
+          window.open(tokenUrl, "_blank");
+        } catch (e) {
+          console.warn("Popup blocked or not allowed, fallback to link", e);
+        }
+      }, 1000);
     });
   }
 }

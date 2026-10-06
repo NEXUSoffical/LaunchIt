@@ -8,35 +8,33 @@ import { TradingTerminal } from "./components/TradingTerminal";
 import { CreateTokenModal } from "./components/CreateTokenModal";
 import { DeployGuideModal } from "./components/DeployGuideModal";
 
-const getInitialTokens = (): Token[] => {
+const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token | null } => {
+  let stored: Token[] = [];
   try {
     const saved = localStorage.getItem("launchit_tokens_db");
     if (saved) {
       const parsed: Token[] = JSON.parse(saved);
-      const purged = parsed.filter(
+      stored = parsed.filter(
         (t) =>
           !["genesis-ai", "sol-cyber-pepe", "quantum-sol", "neon-samurai"].includes(t.id) &&
           !["GENESIS", "CPEPE", "QSOL", "SAMURAI"].includes(t.symbol)
       );
-      if (purged.length > 0) {
-        return purged;
-      }
     }
   } catch (e) {
     console.error("Failed to parse saved tokens", e);
   }
-  return INITIAL_TOKENS;
-};
 
-export const App: React.FC = () => {
-  const [tokens, setTokens] = useState<Token[]>(getInitialTokens);
-  const [trades, setTrades] = useState<Trade[]>(INITIAL_TRADES);
-  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  // Combine stored with INITIAL_TOKENS, deduplicating by mint
+  const tokenMap = new Map<string, Token>();
+  for (const t of stored) tokenMap.set(t.mint, t);
+  for (const t of INITIAL_TOKENS) {
+    if (!tokenMap.has(t.mint)) tokenMap.set(t.mint, t);
+  }
 
-  // Deep-link & TikTok Launch detection from URL
-  useEffect(() => {
+  let selected: Token | null = null;
+
+  // Check URL parameters synchronously on page load
+  if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const newMint = params.get("mint") || params.get("token");
     const newName = params.get("name");
@@ -48,13 +46,13 @@ export const App: React.FC = () => {
       const createdCoin: Token = {
         id: `tiktok-${Date.now()}`,
         mint: newMint,
-        name: newName,
-        symbol: newSymbol.toUpperCase().replace("$", ""),
-        description: videoUrl ? `Launched directly from TikTok: ${videoUrl}` : "Launched directly on LaunchIt via 1-click in-app.",
+        name: decodeURIComponent(newName),
+        symbol: decodeURIComponent(newSymbol).toUpperCase().replace("$", ""),
+        description: videoUrl ? `Launched directly from TikTok: ${decodeURIComponent(videoUrl)}` : "Launched directly on LaunchIt via 1-click in-app.",
         image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
-        creator: params.get("creator") || "@tiktok_creator",
-        creatorHandle: params.get("creator") || "@tiktok_creator",
-        launcherWallet: params.get("launcher_wallet") || null,
+        creator: params.get("creator") ? decodeURIComponent(params.get("creator")!) : "@tiktok_creator",
+        creatorHandle: params.get("creator") ? decodeURIComponent(params.get("creator")!) : "@tiktok_creator",
+        launcherWallet: params.get("launcher_wallet") ? decodeURIComponent(params.get("launcher_wallet")!) : null,
         feeSplit: (params.get("fee_split") as any) || "split_50_50",
         unclaimedCreatorFeesSol: 0,
         unclaimedLauncherFeesSol: 0,
@@ -71,42 +69,74 @@ export const App: React.FC = () => {
         isGraduated: false,
         createdAt: Date.now(),
         socials: {
-          website: videoUrl || undefined,
+          website: videoUrl ? decodeURIComponent(videoUrl) : undefined,
         },
       };
 
-      setTokens((prev) => {
-        const filtered = prev.filter((t) => t.mint !== newMint);
-        const updated = [createdCoin, ...filtered];
-        try {
-          localStorage.setItem("launchit_tokens_db", JSON.stringify(updated));
-        } catch (_) {}
-        return updated;
-      });
+      tokenMap.set(newMint, createdCoin);
+      selected = createdCoin;
 
-      setSelectedToken(createdCoin);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-      // Check path or query for token mint
-      let lookupMint = newMint;
-      if (!lookupMint && window.location.pathname.includes("/token/")) {
-        lookupMint = window.location.pathname.split("/token/")[1]?.split("/")[0];
-      }
-      if (lookupMint) {
-        const found = tokens.find(
-          (t) => t.mint.toLowerCase() === lookupMint?.toLowerCase() || t.symbol.toLowerCase() === lookupMint?.toLowerCase()
-        );
-        if (found) setSelectedToken(found);
-      }
+      try {
+        const all = Array.from(tokenMap.values());
+        localStorage.setItem("launchit_tokens_db", JSON.stringify(all));
+      } catch (_) {}
+    } else if (newMint) {
+      const match = tokenMap.get(newMint) || Array.from(tokenMap.values()).find(
+        (t) => t.mint.toLowerCase() === newMint.toLowerCase() || t.symbol.toLowerCase() === newMint.toLowerCase()
+      );
+      if (match) selected = match;
     }
-  }, []);
+  }
 
-  // Save tokens to localStorage whenever tokens list updates
+  const allTokens = Array.from(tokenMap.values());
+  allTokens.sort((a, b) => b.createdAt - a.createdAt);
+
+  return { initialTokens: allTokens, initialSelected: selected };
+};
+
+const parsedState = parseInitialState();
+
+export const App: React.FC = () => {
+  const [tokens, setTokens] = useState<Token[]>(parsedState.initialTokens);
+  const [trades, setTrades] = useState<Trade[]>(INITIAL_TRADES);
+  const [selectedToken, setSelectedToken] = useState<Token | null>(parsedState.initialSelected);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // Sync with localStorage whenever tokens change
   useEffect(() => {
     try {
       localStorage.setItem("launchit_tokens_db", JSON.stringify(tokens));
     } catch (_) {}
   }, [tokens]);
+
+  // Listen for storage events (e.g. from other tabs) and custom extension events
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "launchit_tokens_db" && e.newValue) {
+        try {
+          const updated: Token[] = JSON.parse(e.newValue);
+          setTokens(updated);
+        } catch (_) {}
+      }
+    };
+
+    const handleCustomInjection = (e: any) => {
+      if (e.detail) {
+        const newToken: Token = e.detail;
+        setTokens((prev) => [newToken, ...prev.filter((t) => t.mint !== newToken.mint)]);
+        setSelectedToken(newToken);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("launchit_coin_injected" as any, handleCustomInjection);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("launchit_coin_injected" as any, handleCustomInjection);
+    };
+  }, []);
 
   // Top trending token for King of the Hill
   const kingToken = tokens.find((t) => !t.isGraduated) || tokens[0];
