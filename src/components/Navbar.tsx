@@ -50,12 +50,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
           />
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "1.3rem", fontWeight: 900, letterSpacing: "-0.5px" }}>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <span style={{ fontSize: "1.35rem", fontWeight: 900, letterSpacing: "-0.5px" }}>
                 LAUNCH<span style={{ color: "#ff6000" }}>IT</span>
-              </span>
-              <span className="badge badge-purple" style={{ fontSize: "0.65rem" }}>
-                Token-2022
               </span>
             </div>
             <div style={{ fontSize: "0.72rem", color: "#ff8c37", fontWeight: 600, letterSpacing: "0.5px" }}>
