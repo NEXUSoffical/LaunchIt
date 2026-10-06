@@ -6,6 +6,10 @@ export interface Token {
   description: string;
   image: string;
   creator: string;
+  creatorHandle?: string;
+  creatorWallet?: string | null;
+  unclaimedCreatorFeesSol?: number;
+  claimedCreatorFeesSol?: number;
   marketCapSol: number;
   marketCapUsd: number;
   priceSol: number;

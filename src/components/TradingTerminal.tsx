@@ -7,11 +7,14 @@ import { TradeHistory } from "./TradeHistory";
 import { HolderDistribution } from "./HolderDistribution";
 import { ArrowLeft, Copy, ExternalLink, Globe, Twitter, Send } from "lucide-react";
 
+import { CreatorRoyaltyVault } from "./CreatorRoyaltyVault";
+
 interface TradingTerminalProps {
   token: Token;
   trades: Trade[];
   onBack: () => void;
   onTradeExecuted: (trade: Trade, updatedToken: Token) => void;
+  onUpdateToken?: (updatedToken: Token) => void;
 }
 
 export const TradingTerminal: React.FC<TradingTerminalProps> = ({
@@ -19,11 +22,31 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
   trades,
   onBack,
   onTradeExecuted,
+  onUpdateToken,
 }) => {
   const shortMint = `${token.mint.slice(0, 6)}...${token.mint.slice(-6)}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+  };
+
+  const handleVaultUpdate = (updatedToken: Token) => {
+    if (onUpdateToken) {
+      onUpdateToken(updatedToken);
+    } else {
+      const dummyTrade: Trade = {
+        id: `royalty-${Date.now()}`,
+        mint: token.mint,
+        user: updatedToken.creatorWallet?.slice(0, 4) || "Creator",
+        isBuy: true,
+        solAmount: 0,
+        tokenAmount: 0,
+        priceSol: token.priceSol,
+        timestamp: Date.now(),
+        txHash: "payout-vault",
+      };
+      onTradeExecuted(dummyTrade, updatedToken);
+    }
   };
 
   return (
@@ -114,6 +137,11 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
             </a>
           )}
         </div>
+      </div>
+
+      {/* Creator Royalty Escrow Vault */}
+      <div style={{ marginBottom: "20px" }}>
+        <CreatorRoyaltyVault token={token} onUpdateToken={handleVaultUpdate} />
       </div>
 
       {/* Main Grid: Left = Chart + Trades, Right = Swap + Progress */}

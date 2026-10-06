@@ -114,6 +114,13 @@ export const App: React.FC = () => {
     setSelectedToken(newToken);
   };
 
+  const handleTokenUpdated = (updatedToken: Token) => {
+    setTokens((prev) =>
+      prev.map((t) => (t.mint === updatedToken.mint ? updatedToken : t))
+    );
+    setSelectedToken(updatedToken);
+  };
+
   const handleTradeExecuted = (newTrade: Trade, updatedToken: Token) => {
     setTrades((prev) => [newTrade, ...prev]);
     setTokens((prev) =>
@@ -140,6 +147,7 @@ export const App: React.FC = () => {
             trades={trades}
             onBack={() => setSelectedToken(null)}
             onTradeExecuted={handleTradeExecuted}
+            onUpdateToken={handleTokenUpdated}
           />
         ) : (
           <>

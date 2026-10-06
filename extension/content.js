@@ -104,7 +104,7 @@ function openInAppLaunchModal() {
       </div>
 
       <div style="background: rgba(255, 96, 0, 0.1); border: 1px solid rgba(255, 96, 0, 0.3); border-radius: 10px; padding: 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.4; color: #cbd5e1;">
-        Turn this video into a live <b>Solana Token-2022 coin</b> on the bonding curve instantly without leaving TikTok!
+        Turn this video into a live <b>Solana Token-2022 coin</b> instantly! 👑 <b>1% of all trading volume</b> automatically accumulates in a secure Escrow Vault for the creator to claim anytime on LaunchIt.
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
