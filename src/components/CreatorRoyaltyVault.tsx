@@ -14,10 +14,11 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const [claimType, setClaimType] = useState<"creator" | "launcher" | null>(null);
   const [payoutAddress, setPayoutAddress] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
-  const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
   const [isVerifyingTikTok, setIsVerifyingTikTok] = useState(false);
   const [isTikTokVerified, setIsTikTokVerified] = useState(false);
   const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
+  const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const split = token.feeSplit || "split_50_50";
   const creatorSol = token.unclaimedCreatorFeesSol || 0;
@@ -25,6 +26,41 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const creatorHandle = token.creatorHandle || token.creator || "@creator";
   const hasLauncherWallet = Boolean(token.launcherWallet);
   const hasCreatorWallet = Boolean(token.creatorWallet);
+
+  const handleTikTokAuth = () => {
+    setAuthError(null);
+    setIsVerifyingTikTok(true);
+
+    const targetHandle = claimType === "creator" ? creatorHandle : (token.launcherHandle || "@launcher");
+
+    window.postMessage({
+      type: "LAUNCHIT_REQUEST_TIKTOK_AUTH",
+      expectedHandle: targetHandle
+    }, "*");
+
+    const timeoutTimer = setTimeout(() => {
+      setIsVerifyingTikTok(false);
+      setAuthError("LaunchIt extension did not respond. Please make sure the LaunchIt extension is enabled in chrome://extensions and you have a TikTok tab open.");
+    }, 4000);
+
+    const onAuthResult = (e: MessageEvent) => {
+      if (e.data?.type === "LAUNCHIT_TIKTOK_AUTH_RESULT") {
+        clearTimeout(timeoutTimer);
+        window.removeEventListener("message", onAuthResult);
+        setIsVerifyingTikTok(false);
+
+        if (e.data.success) {
+          setIsTikTokVerified(true);
+          setVerifiedHandle(`@${e.data.username}`);
+          setAuthError(null);
+        } else {
+          setAuthError(e.data.error || `Access Denied: You are not signed into ${targetHandle} on TikTok.`);
+        }
+      }
+    };
+
+    window.addEventListener("message", onAuthResult);
+  };
 
   const handleClaim = () => {
     if (!payoutAddress.trim() || payoutAddress.trim().length < 32) {
@@ -261,32 +297,26 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                       )}
                     </div>
 
+                    {authError && (
+                      <div
+                        style={{
+                          background: "rgba(239, 68, 68, 0.15)",
+                          border: "1px solid rgba(239, 68, 68, 0.5)",
+                          borderRadius: "10px",
+                          padding: "12px 14px",
+                          color: "#fca5a5",
+                          fontSize: "0.85rem",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <div style={{ fontWeight: 700 }}>❌ Verification Rejected</div>
+                        <div style={{ marginTop: "4px" }}>{authError}</div>
+                      </div>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => {
-                        const width = 600;
-                        const height = 750;
-                        const left = window.screen.width / 2 - width / 2;
-                        const top = window.screen.height / 2 - height / 2;
-                        
-                        setIsVerifyingTikTok(true);
-                        
-                        const popup = window.open(
-                          "https://www.tiktok.com/login",
-                          "TikTokLogin",
-                          `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes`
-                        );
-
-                        // Monitor the real login window
-                        const timer = setInterval(() => {
-                          if (popup && popup.closed) {
-                            clearInterval(timer);
-                            setIsVerifyingTikTok(false);
-                            setIsTikTokVerified(true);
-                            setVerifiedHandle(claimType === "creator" ? creatorHandle : "@launcher");
-                          }
-                        }, 500);
-                      }}
+                      onClick={handleTikTokAuth}
                       disabled={isVerifyingTikTok}
                       style={{
                         padding: "14px",
@@ -307,10 +337,12 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
                       </svg>
-                      <span>{isVerifyingTikTok ? "Signing into TikTok..." : `Sign in with TikTok (${claimType === "creator" ? creatorHandle : "Launcher"})`}</span>
+                      <span>
+                        {isVerifyingTikTok ? "Verifying TikTok Session..." : `Verify with TikTok (${claimType === "creator" ? creatorHandle : "Launcher"})`}
+                      </span>
                     </button>
                     <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textAlign: "center" }}>
-                      🔒 Secure OAuth: Only the verified owner of {claimType === "creator" ? creatorHandle : "this coin"} can claim fees.
+                      🔒 Strict Identity Check: LaunchIt verifies your active TikTok session against {claimType === "creator" ? creatorHandle : "the coin creator"}. Impostor accounts are rejected.
                     </div>
                   </div>
                 ) : (

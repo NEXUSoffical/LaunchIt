@@ -7,6 +7,7 @@ export interface Token {
   image: string;
   creator: string;
   creatorHandle?: string;
+  launcherHandle?: string;
   creatorWallet?: string | null;
   launcherWallet?: string | null;
   feeSplit?: "creator_100" | "split_50_50" | "launcher_100";

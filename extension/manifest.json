@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LaunchIt — TikTok Viral Coin Deployer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Launch Solana Token-2022 coins directly inside TikTok in 1-click. See it, launch it.",
   "icons": {
     "16": "icon.jpg",
@@ -11,13 +11,19 @@
   "permissions": [
     "storage",
     "notifications",
-    "activeTab"
+    "activeTab",
+    "cookies",
+    "scripting"
   ],
   "host_permissions": [
     "https://www.tiktok.com/*",
     "https://launchit.world/*",
-    "https://api.devnet.solana.com/*"
+    "https://api.devnet.solana.com/*",
+    "http://localhost/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icon.jpg"
@@ -27,6 +33,10 @@
       "matches": ["https://www.tiktok.com/*"],
       "js": ["content.js"],
       "css": ["content.css"]
+    },
+    {
+      "matches": ["https://launchit.world/*", "http://localhost/*"],
+      "js": ["launchitBridge.js"]
     }
   ]
 }
