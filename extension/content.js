@@ -110,12 +110,12 @@ function openInAppLaunchModal() {
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div>
           <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Coin Name</label>
-          <input id="launchit-name-input" type="text" value="${data.title}" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 13px;" />
+          <input id="launchit-name-input" type="text" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 13px;" />
         </div>
 
         <div>
           <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Ticker Symbol</label>
-          <input id="launchit-ticker-input" type="text" value="$${data.ticker}" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #ff8c37; font-size: 14px; font-weight: 700; font-family: monospace;" />
+          <input id="launchit-ticker-input" type="text" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #ff8c37; font-size: 14px; font-weight: 700; font-family: monospace;" />
         </div>
 
         <button id="launchit-deploy-btn" style="margin-top: 8px; padding: 14px; border-radius: 10px; border: none; background: linear-gradient(135deg, #ff6000 0%, #ff8c37 100%); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 20px rgba(255, 96, 0, 0.5);">
@@ -129,33 +129,41 @@ function openInAppLaunchModal() {
 
   document.body.appendChild(overlay);
 
-  document.getElementById("launchit-close-btn")?.addEventListener("click", () => overlay.remove());
+  const nameInput = overlay.querySelector("#launchit-name-input");
+  if (nameInput) nameInput.value = data.title;
+  const tickerInput = overlay.querySelector("#launchit-ticker-input");
+  if (tickerInput) tickerInput.value = "$" + data.ticker;
 
-  document.getElementById("launchit-deploy-btn")?.addEventListener("click", () => {
-    const btn = document.getElementById("launchit-deploy-btn");
-    const status = document.getElementById("launchit-status-area");
-    const nameVal = (document.getElementById("launchit-name-input") as HTMLInputElement)?.value || data.title;
-    const tickerVal = (document.getElementById("launchit-ticker-input") as HTMLInputElement)?.value.replace("$", "") || data.ticker;
+  const closeBtn = document.getElementById("launchit-close-btn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => overlay.remove());
+  }
 
-    if (btn) {
-      btn.textContent = "Deploying on Solana...";
-      (btn as HTMLButtonElement).disabled = true;
-    }
+  const deployBtn = document.getElementById("launchit-deploy-btn");
+  if (deployBtn) {
+    deployBtn.addEventListener("click", () => {
+      const statusArea = document.getElementById("launchit-status-area");
+      const currentName = nameInput ? nameInput.value : data.title;
+      const currentTicker = tickerInput ? tickerInput.value.replace("$", "") : data.ticker;
 
-    setTimeout(() => {
-      const fakeMint = `Gen${Math.random().toString(36).substring(2, 8).toUpperCase()}${Math.random().toString(36).substring(2, 8)}Xv7`;
-      const tokenUrl = `https://launchit.world/token/${fakeMint}`;
+      deployBtn.textContent = "Deploying on Solana...";
+      deployBtn.disabled = true;
 
-      if (btn) btn.style.display = "none";
-      if (status) {
-        status.style.display = "block";
-        status.innerHTML = `
-          🎉 <b>$${tickerVal} is LIVE on Solana!</b><br/>
-          <a href="${tokenUrl}" target="_blank" style="color: #00f0ff; text-decoration: underline; display: block; margin-top: 8px; font-weight: 700;">Open on LaunchIt Curve &rarr;</a>
-        `;
-      }
-    }, 1200);
-  });
+      setTimeout(() => {
+        const fakeMint = "Gen" + Math.random().toString(36).substring(2, 8).toUpperCase() + Math.random().toString(36).substring(2, 8) + "Xv7";
+        const tokenUrl = "https://launchit.world/token/" + fakeMint;
+
+        deployBtn.style.display = "none";
+        if (statusArea) {
+          statusArea.style.display = "block";
+          statusArea.innerHTML = `
+            🎉 <b>$` + currentTicker + ` is LIVE on Solana!</b><br/>
+            <a href="` + tokenUrl + `" target="_blank" style="color: #00f0ff; text-decoration: underline; display: block; margin-top: 8px; font-weight: 700;">Open on LaunchIt Curve &rarr;</a>
+          `;
+        }
+      }, 1200);
+    });
+  }
 }
 
 // Check every 1 second to cover fast TikTok video scrolling
