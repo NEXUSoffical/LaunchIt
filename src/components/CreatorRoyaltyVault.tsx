@@ -29,24 +29,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleOpenTikTokLogin = () => {
-    setAuthError(null);
-    setIsLoggingIn(true);
-    const width = 550;
-    const height = 750;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    window.open("https://www.tiktok.com/login", "TikTokLogin", `width=${width},height=${height},top=${top},left=${left}`);
-  };
 
-  const handleOpenTikTokLogout = () => {
-    setAuthError(null);
-    const width = 550;
-    const height = 750;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    window.open("https://www.tiktok.com/logout", "TikTokLogin", `width=${width},height=${height},top=${top},left=${left}`);
-  };
 
   const handleVerifyTikTokAuth = () => {
     setAuthError(null);
@@ -350,69 +333,46 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                     )}
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {/* Big Sign in with TikTok Button */}
-                      <button
-                        type="button"
-                        onClick={handleOpenTikTokLogin}
-                        style={{
-                          padding: "14px",
-                          borderRadius: "12px",
-                          border: "1px solid rgba(255, 255, 255, 0.2)",
-                          background: "#000000",
-                          color: "#ffffff",
-                          fontSize: "1rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "10px",
-                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.4)",
-                        }}
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
-                        </svg>
-                        <span>Sign in with TikTok</span>
-                      </button>
-
-                      <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span>Logged into the wrong account?</span>
-                        <button
-                          type="button"
-                          onClick={handleOpenTikTokLogout}
-                          style={{ background: "none", border: "none", color: "#ff8c37", cursor: "pointer", fontWeight: 600, textDecoration: "underline", padding: 0 }}
-                        >
-                          Log Out First to Switch ↗
-                        </button>
-                      </div>
-
-                      {/* Real Verification Action Button */}
+                      {/* Direct TikTok Session Check - NO POPUPS, NO VIDEO FEED */}
                       <button
                         type="button"
                         onClick={handleVerifyTikTokAuth}
                         disabled={isVerifying}
                         style={{
                           width: "100%",
-                          padding: "14px",
-                          fontSize: "0.95rem",
+                          padding: "16px",
+                          borderRadius: "14px",
+                          border: "1px solid rgba(255, 255, 255, 0.2)",
+                          background: isVerifying ? "rgba(255, 96, 0, 0.6)" : "#000000",
+                          color: "#ffffff",
+                          fontSize: "1rem",
                           fontWeight: 800,
-                          borderRadius: "10px",
-                          marginTop: "6px",
                           cursor: isVerifying ? "not-allowed" : "pointer",
-                          background: isVerifying ? "rgba(255, 96, 0, 0.5)" : "linear-gradient(135deg, #14f195 0%, #00b4d8 100%)",
-                          color: "#000",
-                          border: "none",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: "8px",
-                          boxShadow: "0 4px 15px rgba(20, 241, 149, 0.3)",
+                          gap: "10px",
+                          boxShadow: "0 6px 20px rgba(0, 0, 0, 0.5)",
+                          transition: "all 0.2s ease",
                         }}
                       >
-                        <ShieldCheck size={20} />
-                        <span>{isVerifying ? "Verifying TikTok Session..." : "Verify TikTok Session & Unlock Royalties"}</span>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
+                        </svg>
+                        <span>{isVerifying ? "Checking TikTok Session..." : "Sign in & Verify TikTok Account"}</span>
                       </button>
+
+                      <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "10px 12px", fontSize: "0.78rem", color: "#94a3b8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Logged into a different account?</span>
+                        <a
+                          href="https://www.tiktok.com/logout"
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "#ff8c37", fontWeight: 600, textDecoration: "underline" }}
+                        >
+                          Log Out to Switch ↗
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ) : (
