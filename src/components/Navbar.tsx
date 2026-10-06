@@ -37,31 +37,29 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={onHomeClick}
           style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
         >
-          <div
+          <img
+            src="/logo.jpg"
+            alt="LaunchIt Logo"
             style={{
-              width: "42px",
-              height: "42px",
+              width: "46px",
+              height: "46px",
               borderRadius: "12px",
-              background: "linear-gradient(135deg, #9945FF 0%, #14F195 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 0 15px rgba(20, 241, 149, 0.4)",
+              objectFit: "cover",
+              border: "1.5px solid rgba(255, 96, 0, 0.5)",
+              boxShadow: "0 0 16px rgba(255, 96, 0, 0.4)",
             }}
-          >
-            <Rocket size={24} color="#07090e" strokeWidth={2.5} />
-          </div>
+          />
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "1.25rem", fontWeight: 800, letterSpacing: "-0.5px" }}>
-                LAUNCHIT
+              <span style={{ fontSize: "1.3rem", fontWeight: 900, letterSpacing: "-0.5px" }}>
+                LAUNCH<span style={{ color: "#ff6000" }}>IT</span>
               </span>
               <span className="badge badge-purple" style={{ fontSize: "0.65rem" }}>
                 Token-2022
               </span>
             </div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Solana Fair Launchpad
+            <div style={{ fontSize: "0.72rem", color: "#ff8c37", fontWeight: 600, letterSpacing: "0.5px" }}>
+              — see it launch it —
             </div>
           </div>
         </div>

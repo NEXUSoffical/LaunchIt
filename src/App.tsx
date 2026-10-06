@@ -110,8 +110,11 @@ export const App: React.FC = () => {
         }}
       >
         <div className="container" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-          <div>
-            <b>LAUNCHIT</b> • Built with Solana SPL Token-2022 & Virtual Constant Product Bonding Curves
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <img src="/logo.jpg" alt="LaunchIt" style={{ width: "28px", height: "28px", borderRadius: "6px", objectFit: "cover" }} />
+            <div>
+              <b>LAUNCH<span style={{ color: "#ff6000" }}>IT</span></b> • <span style={{ color: "#ff8c37", fontWeight: 600 }}>see it launch it</span> • Solana Token-2022
+            </div>
           </div>
           <div style={{ display: "flex", gap: "16px" }}>
             <span style={{ color: "var(--solana-green)" }}>● Devnet Live</span>
