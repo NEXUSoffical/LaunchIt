@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Token } from "../types";
-import { Coins, CheckCircle2, ShieldCheck, ArrowRight, X, ExternalLink, Sparkles } from "lucide-react";
+import { Coins, CheckCircle2, ShieldCheck, ArrowRight, X, ExternalLink, Sparkles, User, Zap } from "lucide-react";
 
 interface CreatorRoyaltyVaultProps {
   token: Token;
@@ -11,15 +11,17 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   token,
   onUpdateToken,
 }) => {
-  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [claimType, setClaimType] = useState<"creator" | "launcher" | null>(null);
   const [payoutAddress, setPayoutAddress] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
 
-  const unclaimedSol = token.unclaimedCreatorFeesSol || 0;
-  const unclaimedUsd = unclaimedSol * 150;
+  const split = token.feeSplit || "split_50_50";
+  const creatorSol = token.unclaimedCreatorFeesSol || 0;
+  const launcherSol = token.unclaimedLauncherFeesSol || 0;
   const creatorHandle = token.creatorHandle || token.creator || "@creator";
-  const isClaimed = Boolean(token.creatorWallet);
+  const hasLauncherWallet = Boolean(token.launcherWallet);
+  const hasCreatorWallet = Boolean(token.creatorWallet);
 
   const handleClaim = () => {
     if (!payoutAddress.trim() || payoutAddress.trim().length < 32) {
@@ -29,17 +31,29 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
     setIsClaiming(true);
     setTimeout(() => {
-      const claimedAmount = unclaimedSol;
-      const updated: Token = {
-        ...token,
-        creatorWallet: payoutAddress.trim(),
-        unclaimedCreatorFeesSol: 0,
-        claimedCreatorFeesSol: (token.claimedCreatorFeesSol || 0) + claimedAmount,
-      };
+      let updated: Token;
+      if (claimType === "creator") {
+        const amt = creatorSol;
+        updated = {
+          ...token,
+          creatorWallet: payoutAddress.trim(),
+          unclaimedCreatorFeesSol: 0,
+          claimedCreatorFeesSol: (token.claimedCreatorFeesSol || 0) + amt,
+        };
+        setClaimSuccessMsg(`Transferred ${amt.toFixed(4)} SOL to Video Creator wallet ${payoutAddress.slice(0, 4)}...${payoutAddress.slice(-4)}!`);
+      } else {
+        const amt = launcherSol;
+        updated = {
+          ...token,
+          launcherWallet: payoutAddress.trim(),
+          unclaimedLauncherFeesSol: 0,
+          claimedLauncherFeesSol: (token.claimedLauncherFeesSol || 0) + amt,
+        };
+        setClaimSuccessMsg(`Transferred ${amt.toFixed(4)} SOL to Coin Launcher wallet ${payoutAddress.slice(0, 4)}...${payoutAddress.slice(-4)}!`);
+      }
 
       onUpdateToken(updated);
       setIsClaiming(false);
-      setClaimSuccessMsg(`Successfully claimed ${claimedAmount.toFixed(4)} SOL to ${payoutAddress.slice(0, 4)}...${payoutAddress.slice(-4)}!`);
     }, 1200);
   };
 
@@ -53,80 +67,107 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
           border: "1px solid rgba(255, 96, 0, 0.35)",
           borderRadius: "16px",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "16px",
+          flexDirection: "column",
+          gap: "14px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <div
-            style={{
-              width: "44px",
-              height: "44px",
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              boxShadow: "0 4px 15px rgba(255, 96, 0, 0.4)",
-            }}
-          >
-            <Coins size={22} />
+        {/* Header bar: Fee Split Badge */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Coins size={18} color="#ff8c37" />
+            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#fff" }}>
+              1% Creator Royalty Vaults
+            </span>
           </div>
-
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff" }}>
-                Creator Royalty Vault:
-              </span>
-              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--solana-cyan)" }}>
-                {creatorHandle}
-              </span>
-              <span className="badge badge-purple" style={{ fontSize: "0.7rem", padding: "2px 8px" }}>
-                1% Fee Escrow
-              </span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginTop: "2px" }}>
-              <span className="mono" style={{ fontSize: "1.25rem", fontWeight: 800, color: "#14f195" }}>
-                {unclaimedSol.toFixed(4)} SOL
-              </span>
-              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                ≈ ${unclaimedUsd.toFixed(2)} USD {isClaimed ? "(Wallet Linked)" : "(Unclaimed)"}
-              </span>
-            </div>
-          </div>
+          <span className="badge badge-purple" style={{ fontSize: "0.75rem", padding: "3px 10px", fontWeight: 700 }}>
+            {split === "split_50_50" ? "⚡ 50 / 50 Split (Creator & Launcher)" : split === "creator_100" ? "👑 100% to Video Creator" : "🚀 100% to Coin Launcher"}
+          </span>
         </div>
 
-        <button
-          onClick={() => setIsClaimModalOpen(true)}
-          style={{
-            padding: "10px 18px",
-            borderRadius: "10px",
-            background: "linear-gradient(135deg, #14f195 0%, #00f0ff 100%)",
-            color: "#0a0e17",
-            fontWeight: 800,
-            fontSize: "0.85rem",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            boxShadow: "0 4px 16px rgba(20, 241, 149, 0.3)",
-            transition: "transform 0.2s ease",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-        >
-          <Sparkles size={16} />
-          <span>{isClaimed ? "Manage Payouts" : "Claim Creator Royalties"}</span>
-        </button>
+        {/* Dual or Single Vault Display */}
+        <div style={{ display: "grid", gridTemplateColumns: split === "split_50_50" ? "1fr 1fr" : "1fr", gap: "12px" }}>
+          {/* Video Creator Vault */}
+          {(split === "split_50_50" || split === "creator_100") && (
+            <div
+              style={{
+                background: "rgba(0, 0, 0, 0.25)",
+                border: "1px solid rgba(255, 255, 255, 0.06)",
+                borderRadius: "12px",
+                padding: "12px 14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span>Video Owner:</span>
+                  <b style={{ color: "var(--solana-cyan)" }}>{creatorHandle}</b>
+                </div>
+                <div className="mono" style={{ fontSize: "1.1rem", fontWeight: 800, color: "#14f195", marginTop: "2px" }}>
+                  {creatorSol.toFixed(4)} SOL <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>(${ (creatorSol * 150).toFixed(2) })</span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setClaimType("creator");
+                  setPayoutAddress(token.creatorWallet || "");
+                }}
+                className="btn-secondary"
+                style={{ padding: "6px 12px", fontSize: "0.75rem", fontWeight: 700, borderRadius: "8px" }}
+              >
+                {hasCreatorWallet ? "Claimed" : "Claim as Creator"}
+              </button>
+            </div>
+          )}
+
+          {/* Launcher / Hunter Vault */}
+          {(split === "split_50_50" || split === "launcher_100") && (
+            <div
+              style={{
+                background: "rgba(0, 0, 0, 0.25)",
+                border: "1px solid rgba(255, 255, 255, 0.06)",
+                borderRadius: "12px",
+                padding: "12px 14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span>Coin Launcher:</span>
+                  <b style={{ color: "#ff8c37" }}>{hasLauncherWallet ? `${token.launcherWallet?.slice(0, 4)}...${token.launcherWallet?.slice(-4)}` : "You (Deployer)"}</b>
+                </div>
+                <div className="mono" style={{ fontSize: "1.1rem", fontWeight: 800, color: "#ff8c37", marginTop: "2px" }}>
+                  {launcherSol.toFixed(4)} SOL <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>(${ (launcherSol * 150).toFixed(2) })</span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setClaimType("launcher");
+                  setPayoutAddress(token.launcherWallet || "");
+                }}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: "0.75rem",
+                  fontWeight: 800,
+                  borderRadius: "8px",
+                  background: "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)",
+                  color: "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {hasLauncherWallet ? "Payout Linked" : "Claim as Launcher"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Claim Modal */}
-      {isClaimModalOpen && (
+      {claimType && (
         <div
           style={{
             position: "fixed",
@@ -147,20 +188,20 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
               maxWidth: "520px",
               padding: "28px",
               position: "relative",
-              border: "1px solid rgba(20, 241, 149, 0.4)",
+              border: claimType === "creator" ? "1px solid rgba(20, 241, 149, 0.4)" : "1px solid rgba(255, 96, 0, 0.4)",
               borderRadius: "20px",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <Coins size={24} color="#14f195" />
+                <Coins size={24} color={claimType === "creator" ? "#14f195" : "#ff8c37"} />
                 <h3 style={{ fontSize: "1.2rem", fontWeight: 800, margin: 0 }}>
-                  Claim Royalties for {creatorHandle}
+                  {claimType === "creator" ? `Claim Royalties for ${creatorHandle}` : "Claim Coin Launcher Royalties"}
                 </h3>
               </div>
               <button
                 onClick={() => {
-                  setIsClaimModalOpen(false);
+                  setClaimType(null);
                   setClaimSuccessMsg(null);
                 }}
                 style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
@@ -178,7 +219,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                 </p>
                 <button
                   onClick={() => {
-                    setIsClaimModalOpen(false);
+                    setClaimType(null);
                     setClaimSuccessMsg(null);
                   }}
                   className="btn-primary"
@@ -190,18 +231,26 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div style={{ background: "rgba(255, 255, 255, 0.03)", borderRadius: "12px", padding: "14px", border: "1px solid var(--border-subtle)" }}>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Accrued Unclaimed Royalties</div>
-                  <div className="mono" style={{ fontSize: "1.6rem", fontWeight: 800, color: "#14f195", marginTop: "4px" }}>
-                    {unclaimedSol.toFixed(4)} SOL <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>(${unclaimedUsd.toFixed(2)})</span>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    {claimType === "creator" ? "Accrued Video Owner Royalties" : "Accrued Launcher / Deployer Royalties"}
+                  </div>
+                  <div className="mono" style={{ fontSize: "1.6rem", fontWeight: 800, color: claimType === "creator" ? "#14f195" : "#ff8c37", marginTop: "4px" }}>
+                    {(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL{" "}
+                    <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>
+                      (${ ((claimType === "creator" ? creatorSol : launcherSol) * 150).toFixed(2) })
+                    </span>
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                    1% of all buys and sells automatically stream into this vault permanently.
+                    {split === "split_50_50" ? "50% of the 1% trading volume automatically routes here." : "100% of creator trading fees route here."}
                   </div>
                 </div>
 
                 <div style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#cbd5e1" }}>
-                  <b>Are you {creatorHandle} on TikTok?</b><br />
-                  Prove ownership by connecting your TikTok or pasting your Solana payout wallet below to withdraw your accumulated royalties:
+                  {claimType === "creator" ? (
+                    <><b>Are you {creatorHandle} on TikTok?</b> Verify ownership or enter your Solana wallet to route accrued creator royalties:</>
+                  ) : (
+                    <><b>Are you the meme launcher?</b> Enter your Solana wallet to route your deployer royalties directly to your address:</>
+                  )}
                 </div>
 
                 <div>

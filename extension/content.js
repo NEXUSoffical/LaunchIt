@@ -118,6 +118,26 @@ function openInAppLaunchModal() {
           <input id="launchit-ticker-input" type="text" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #ff8c37; font-size: 14px; font-weight: 700; font-family: monospace;" />
         </div>
 
+        <div>
+          <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 6px;">1% Creator Fee Allocation</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;" id="launchit-split-selector">
+            <button type="button" class="launchit-split-btn active" data-split="split_50_50" style="padding: 8px 4px; font-size: 11px; font-weight: 700; border-radius: 8px; cursor: pointer; border: 1.5px solid #ff6000; background: rgba(255, 96, 0, 0.2); color: #fff;">
+              ⚡ 50 / 50<br/><span style="font-size: 9px; opacity: 0.8; font-weight: 500;">You & Creator</span>
+            </button>
+            <button type="button" class="launchit-split-btn" data-split="creator_100" style="padding: 8px 4px; font-size: 11px; font-weight: 700; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.1); background: #151c2b; color: #94a3b8;">
+              👑 100%<br/><span style="font-size: 9px; opacity: 0.8; font-weight: 500;">Video Owner</span>
+            </button>
+            <button type="button" class="launchit-split-btn" data-split="launcher_100" style="padding: 8px 4px; font-size: 11px; font-weight: 700; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.1); background: #151c2b; color: #94a3b8;">
+              🚀 100%<br/><span style="font-size: 9px; opacity: 0.8; font-weight: 500;">To You</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="launchit-launcher-wallet-group">
+          <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Your Solana Payout Wallet (Optional)</label>
+          <input id="launchit-launcher-wallet-input" type="text" placeholder="e.g. 7WdK...9R2e (or claim later on LaunchIt)" style="width: 100%; box-sizing: border-box; background: #151c2b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 12px; font-family: monospace;" />
+        </div>
+
         <button id="launchit-deploy-btn" style="margin-top: 8px; padding: 14px; border-radius: 10px; border: none; background: linear-gradient(135deg, #ff6000 0%, #ff8c37 100%); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 20px rgba(255, 96, 0, 0.5);">
           Launch Coin on Solana 🐆
         </button>
@@ -134,6 +154,27 @@ function openInAppLaunchModal() {
   const tickerInput = overlay.querySelector("#launchit-ticker-input");
   if (tickerInput) tickerInput.value = "$" + data.ticker;
 
+  let selectedSplit = "split_50_50";
+  const splitBtns = overlay.querySelectorAll(".launchit-split-btn");
+  splitBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      splitBtns.forEach((b) => {
+        b.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+        b.style.background = "#151c2b";
+        b.style.color = "#94a3b8";
+      });
+      btn.style.border = "1.5px solid #ff6000";
+      btn.style.background = "rgba(255, 96, 0, 0.2)";
+      btn.style.color = "#fff";
+      selectedSplit = btn.getAttribute("data-split") || "split_50_50";
+
+      const walletGroup = overlay.querySelector("#launchit-launcher-wallet-group");
+      if (walletGroup) {
+        walletGroup.style.display = selectedSplit === "creator_100" ? "none" : "block";
+      }
+    });
+  });
+
   const closeBtn = document.getElementById("launchit-close-btn");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => overlay.remove());
@@ -145,13 +186,20 @@ function openInAppLaunchModal() {
       const statusArea = document.getElementById("launchit-status-area");
       const currentName = nameInput ? nameInput.value : data.title;
       const currentTicker = tickerInput ? tickerInput.value.replace("$", "") : data.ticker;
+      const launcherWallet = (overlay.querySelector("#launchit-launcher-wallet-input")?.value || "").trim();
 
       deployBtn.textContent = "Deploying on Solana...";
       deployBtn.disabled = true;
 
       setTimeout(() => {
         const fakeMint = "Gen" + Math.random().toString(36).substring(2, 8).toUpperCase() + Math.random().toString(36).substring(2, 8) + "Xv7";
-        const tokenUrl = "https://launchit.world/?new_token=1&mint=" + encodeURIComponent(fakeMint) + "&name=" + encodeURIComponent(currentName) + "&symbol=" + encodeURIComponent(currentTicker) + "&video=" + encodeURIComponent(data.url) + "&creator=" + encodeURIComponent(data.creator);
+        const tokenUrl = "https://launchit.world/?new_token=1&mint=" + encodeURIComponent(fakeMint) + 
+          "&name=" + encodeURIComponent(currentName) + 
+          "&symbol=" + encodeURIComponent(currentTicker) + 
+          "&video=" + encodeURIComponent(data.url) + 
+          "&creator=" + encodeURIComponent(data.creator) + 
+          "&fee_split=" + encodeURIComponent(selectedSplit) + 
+          (launcherWallet ? "&launcher_wallet=" + encodeURIComponent(launcherWallet) : "");
 
         deployBtn.style.display = "none";
         if (statusArea) {

@@ -8,8 +8,12 @@ export interface Token {
   creator: string;
   creatorHandle?: string;
   creatorWallet?: string | null;
+  launcherWallet?: string | null;
+  feeSplit?: "creator_100" | "split_50_50" | "launcher_100";
   unclaimedCreatorFeesSol?: number;
   claimedCreatorFeesSol?: number;
+  unclaimedLauncherFeesSol?: number;
+  claimedLauncherFeesSol?: number;
   marketCapSol: number;
   marketCapUsd: number;
   priceSol: number;

@@ -66,7 +66,11 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         const newProgress = ClientCurve.getProgress(newRealSol);
         const mc = ClientCurve.getMarketCap(newRealSol, newRealTokens);
 
-        const creatorFeeBuy = val * 0.01;
+        const totalFeeBuy = val * 0.01;
+        const split = token.feeSplit || "split_50_50";
+        const creatorFeeBuy = split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeBuy : totalFeeBuy * 0.5;
+        const launcherFeeBuy = split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeBuy : totalFeeBuy * 0.5;
+
         const updatedToken: Token = {
           ...token,
           realSolReserves: newRealSol,
@@ -76,6 +80,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + val,
           unclaimedCreatorFeesSol: (token.unclaimedCreatorFeesSol || 0) + creatorFeeBuy,
+          unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeBuy,
           isGraduated: newProgress >= 100,
         };
 
@@ -94,7 +99,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         onTradeExecuted(newTrade, updatedToken);
         setStatusMsg({
           type: "success",
-          text: `Successfully bought ${(tokensReceived / 1e6).toFixed(2)}M $${token.symbol}! (1% Creator Fee routed to Vault)`,
+          text: `Successfully bought ${(tokensReceived / 1e6).toFixed(2)}M $${token.symbol}! (1% Fee routed to Vault)`,
         });
       } else {
         // Sell
@@ -119,7 +124,11 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         const newRealTokens = token.realTokenReserves + val;
         const newProgress = ClientCurve.getProgress(newRealSol);
         const mc = ClientCurve.getMarketCap(newRealSol, newRealTokens);
-        const creatorFeeSell = solReceived * 0.01;
+
+        const totalFeeSell = solReceived * 0.01;
+        const split = token.feeSplit || "split_50_50";
+        const creatorFeeSell = split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeSell : totalFeeSell * 0.5;
+        const launcherFeeSell = split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeSell : totalFeeSell * 0.5;
 
         const updatedToken: Token = {
           ...token,
@@ -130,6 +139,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + solReceived,
           unclaimedCreatorFeesSol: (token.unclaimedCreatorFeesSol || 0) + creatorFeeSell,
+          unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeSell,
         };
 
         const newTrade: Trade = {
