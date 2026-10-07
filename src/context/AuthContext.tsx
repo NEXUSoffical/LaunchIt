@@ -16,6 +16,7 @@ interface AuthContextType {
     usernameOrEmail: string;
     password?: string;
   }) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (usernameOrEmail: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   loginAsDemo: () => void;
   logout: () => void;
   updateProfile: (updates: Partial<UserAccount>) => void;
@@ -197,38 +198,139 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: "Please enter your username or email." };
       }
 
+      const inputPassword = credentials.password?.trim() || "";
+
       const db = getStoredAccounts();
+      let matchKey = query;
       let match = db[query];
 
       if (!match) {
         // Search by email
-        const found = Object.values(db).find((a) => a.user.email.toLowerCase() === query);
-        if (found) match = found;
+        const foundEntry = Object.entries(db).find(([, a]) => a.user.email.toLowerCase() === query);
+        if (foundEntry) {
+          matchKey = foundEntry[0];
+          match = foundEntry[1];
+        }
       }
 
+      // If not found locally, try checking Supabase
       if (!match) {
+        try {
+          const emailQuery = query.includes("@") ? query : `${query}@launchit.fun`;
+          const { data: sbData, error: sbErr } = await supabase.auth.signInWithPassword({
+            email: emailQuery,
+            password: inputPassword,
+          });
+          if (!sbErr && sbData.user) {
+            const restoredUser: UserAccount = {
+              id: sbData.user.id,
+              username: query.replace("@", ""),
+              email: sbData.user.email || emailQuery,
+              displayName: query,
+              avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${query}&backgroundColor=111420`,
+              solanaWallet: generateDevnetSolanaAddress(query),
+              balanceSol: 0.0,
+              userTokens: {},
+              createdAt: Date.now(),
+              reputationKarma: 100,
+            };
+            db[query] = { user: restoredUser, passwordHash: inputPassword };
+            saveStoredAccounts(db);
+            saveSession(restoredUser);
+            return { success: true };
+          }
+        } catch (_) {}
+
         return { success: false, error: "Account not found. Please create an official account first." };
       }
 
-      // Check password if set
-      if (match.passwordHash && credentials.password && match.passwordHash !== credentials.password) {
-        return { success: false, error: "Incorrect password. Please try again." };
+      const storedPassword = match.passwordHash?.trim() || "";
+      let isPasswordValid = false;
+
+      // Check direct equality or trimmed equality
+      if (!storedPassword || storedPassword === "default_pw") {
+        // Self-heal: set stored password to what user entered
+        match.passwordHash = inputPassword;
+        db[matchKey] = match;
+        saveStoredAccounts(db);
+        isPasswordValid = true;
+      } else if (storedPassword === inputPassword) {
+        isPasswordValid = true;
+      } else {
+        // Try verifying with Supabase in case password was changed on backend
+        if (match.user.email && inputPassword) {
+          try {
+            const { data: sbData, error: sbErr } = await supabase.auth.signInWithPassword({
+              email: match.user.email,
+              password: inputPassword,
+            });
+            if (!sbErr && sbData.user) {
+              match.passwordHash = inputPassword;
+              db[matchKey] = match;
+              saveStoredAccounts(db);
+              isPasswordValid = true;
+            }
+          } catch (_) {}
+        }
       }
 
-      // Optional background Supabase sign in
-      try {
-        if (credentials.password && match.user.email) {
-          await supabase.auth.signInWithPassword({
-            email: match.user.email,
-            password: credentials.password,
-          });
-        }
-      } catch (_) {}
+      if (!isPasswordValid) {
+        return {
+          success: false,
+          error: "Incorrect password. You can reset your password below if needed.",
+        };
+      }
 
       saveSession(match.user);
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e.message || "Failed to sign in." };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetPassword = async (
+    usernameOrEmail: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const query = usernameOrEmail.trim().replace(/^@/, "").toLowerCase();
+      if (!query) return { success: false, error: "Please enter your username or email." };
+      const cleanPw = newPassword.trim();
+      if (!cleanPw || cleanPw.length < 4) {
+        return { success: false, error: "New password must be at least 4 characters." };
+      }
+
+      const db = getStoredAccounts();
+      let matchKey = query;
+      let match = db[query];
+      if (!match) {
+        const found = Object.entries(db).find(([, a]) => a.user.email.toLowerCase() === query);
+        if (found) {
+          matchKey = found[0];
+          match = found[1];
+        }
+      }
+
+      if (!match) {
+        return { success: false, error: "Account not found for that username or email." };
+      }
+
+      match.passwordHash = cleanPw;
+      db[matchKey] = match;
+      saveStoredAccounts(db);
+
+      // Attempt Supabase password update
+      try {
+        await supabase.auth.updateUser({ password: cleanPw });
+      } catch (_) {}
+
+      saveSession(match.user);
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || "Failed to reset password." };
     } finally {
       setIsLoading(false);
     }
@@ -294,6 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         register,
         login,
+        resetPassword,
         loginAsDemo,
         logout,
         updateProfile,

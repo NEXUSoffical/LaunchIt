@@ -16,6 +16,9 @@ import {
   ArrowRight,
   Flame,
   Layers,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 import { Token } from "../types";
 
@@ -24,7 +27,7 @@ interface LandingHomePageProps {
 }
 
 export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens = [] }) => {
-  const { register, login, loginAsDemo, isLoading } = useAuth();
+  const { register, login, resetPassword, loginAsDemo, isLoading } = useAuth();
 
   const [mode, setMode] = useState<"register" | "login">("register");
 
@@ -32,8 +35,15 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
+
   const [loginIdentifier, setLoginIdentifier] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [newResetPassword, setNewResetPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -68,6 +78,19 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
       setErrorMessage(res.error || "Failed to sign in.");
     } else {
       setSuccessMessage("Welcome back! Entering LaunchIt...");
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const res = await resetPassword(loginIdentifier, newResetPassword);
+
+    if (!res.success) {
+      setErrorMessage(res.error || "Failed to reset password.");
+    } else {
+      setSuccessMessage("Password updated successfully! Entering LaunchIt...");
     }
   };
 
@@ -445,7 +468,7 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                     >
                       <Lock size={16} color="var(--text-muted)" />
                       <input
-                        type="password"
+                        type={showRegPassword ? "text" : "password"}
                         placeholder="••••••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -459,6 +482,22 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                           fontSize: "0.95rem",
                         }}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--text-muted)",
+                          padding: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          cursor: "pointer",
+                        }}
+                        title={showRegPassword ? "Hide password" : "Show password"}
+                      >
+                        {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
 
@@ -479,8 +518,22 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                     <span>{isLoading ? "Creating Account..." : "Create Account & Enter Platform"}</span>
                   </button>
                 </form>
-              ) : (
-                <form onSubmit={handleLoginSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+              ) : isResetMode ? (
+                <form onSubmit={handleResetSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                  <div
+                    style={{
+                      background: "rgba(255, 96, 0, 0.12)",
+                      border: "1px solid rgba(255, 96, 0, 0.35)",
+                      borderRadius: "12px",
+                      padding: "12px 14px",
+                      fontSize: "0.82rem",
+                      color: "#ff8c37",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <b>🔑 Reset Password:</b> Enter your username or email and your new password to instantly update your account and sign in.
+                  </div>
+
                   <div>
                     <label
                       style={{
@@ -537,8 +590,174 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                         letterSpacing: "0.5px",
                       }}
                     >
-                      Password
+                      Enter New Password
                     </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "10px",
+                        padding: "0 14px",
+                        gap: "10px",
+                      }}
+                    >
+                      <KeyRound size={16} color="var(--text-muted)" />
+                      <input
+                        type={showResetPassword ? "text" : "password"}
+                        placeholder="Enter new password (min 4 chars)"
+                        value={newResetPassword}
+                        onChange={(e) => setNewResetPassword(e.target.value)}
+                        required
+                        style={{
+                          flex: 1,
+                          background: "transparent",
+                          border: "none",
+                          color: "#fff",
+                          padding: "12px 0",
+                          fontSize: "0.95rem",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowResetPassword(!showResetPassword)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--text-muted)",
+                          padding: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          cursor: "pointer",
+                        }}
+                        title={showResetPassword ? "Hide password" : "Show password"}
+                      >
+                        {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="btn-primary"
+                    style={{
+                      padding: "14px",
+                      fontSize: "1rem",
+                      borderRadius: "12px",
+                      background: "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)",
+                      color: "#fff",
+                    }}
+                  >
+                    <KeyRound size={18} />
+                    <span>{isLoading ? "Updating Password..." : "Update Password & Sign In"}</span>
+                  </button>
+
+                  <div style={{ textAlign: "center" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsResetMode(false);
+                        setErrorMessage(null);
+                      }}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--text-muted)",
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                      }}
+                    >
+                      ← Back to standard Sign In
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleLoginSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                        color: "var(--text-secondary)",
+                        marginBottom: "6px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Username or Email
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "10px",
+                        padding: "0 14px",
+                        gap: "10px",
+                      }}
+                    >
+                      <User size={16} color="var(--text-muted)" />
+                      <input
+                        type="text"
+                        placeholder="Username or email"
+                        value={loginIdentifier}
+                        onChange={(e) => setLoginIdentifier(e.target.value)}
+                        required
+                        style={{
+                          flex: 1,
+                          background: "transparent",
+                          border: "none",
+                          color: "#fff",
+                          padding: "12px 0",
+                          fontSize: "0.95rem",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <label
+                        style={{
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                          color: "var(--text-secondary)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                      >
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsResetMode(true);
+                          setErrorMessage(null);
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#ff8c37",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Forgot / Reset Password?
+                      </button>
+                    </div>
                     <div
                       style={{
                         display: "flex",
@@ -552,7 +771,7 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                     >
                       <Lock size={16} color="var(--text-muted)" />
                       <input
-                        type="password"
+                        type={showLoginPassword ? "text" : "password"}
                         placeholder="••••••••••••"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
@@ -566,6 +785,22 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                           fontSize: "0.95rem",
                         }}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--text-muted)",
+                          padding: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          cursor: "pointer",
+                        }}
+                        title={showLoginPassword ? "Hide password" : "Show password"}
+                      >
+                        {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
 
