@@ -111,12 +111,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       try {
         const expected = (request.expectedHandle || "").replace("@", "").trim().toLowerCase();
 
+        try {
+          await chrome.storage.local.set({ expectedCreatorHandle: expected });
+        } catch (_) {}
+
         // 1. Clear all existing sessions so user is NEVER locked into the wrong account or greeted with "Already logged in"
         await clearAllTikTokSession();
 
         // 2. Open clean login popup
         const win = await chrome.windows.create({
-          url: "https://www.tiktok.com/login",
+          url: `https://www.tiktok.com/login#creator=${expected}`,
           type: "popup",
           width: 550,
           height: 750,
@@ -132,8 +136,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             if (changeInfo.status === "complete" && tab.url) {
               const url = tab.url.toLowerCase();
-              if (url.includes("/login") || url.includes("/signup")) {
-                return; // User is entering credentials
+              if (url.includes("/login") || url.includes("/signup") || url.includes("/logout")) {
+                return; // User is entering credentials or on logout page
               }
 
               // Navigated away from login screen! Check logged in account
@@ -156,9 +160,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const loggedInUser = (results?.[0]?.result || "").toLowerCase().trim();
                 if (loggedInUser) {
                   if (expected && loggedInUser !== expected) {
-                    // Mismatched account! Wipe session and return to login screen
+                    // Mismatched account! Wipe session and return to logout screen
                     await clearAllTikTokSession();
-                    chrome.tabs.update(tabId, { url: "https://www.tiktok.com/login" }).catch(() => {});
+                    chrome.tabs.update(tabId, { url: `https://www.tiktok.com/logout#creator=${expected}` }).catch(() => {});
                     chrome.tabs.query({ url: ["https://launchit.world/*", "http://localhost/*", "http://127.0.0.1/*"] }, (tabs) => {
                       for (const t of tabs || []) {
                         if (t.id) {

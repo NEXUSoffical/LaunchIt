@@ -9,6 +9,22 @@ let loginCompletedDispatched = false;
 
 // Monitor login popup window once login completes
 if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.innerWidth <= 650) {
+  let expectedCreator = "";
+  try {
+    const hash = window.location.hash || "";
+    if (hash.includes("creator=")) {
+      expectedCreator = hash.split("creator=")[1]?.split("&")[0]?.replace("@", "")?.trim()?.toLowerCase() || "";
+    }
+  } catch (_) {}
+
+  try {
+    chrome.storage.local.get(["expectedCreatorHandle"], (res) => {
+      if (res?.expectedCreatorHandle) {
+        expectedCreator = res.expectedCreatorHandle.replace("@", "").trim().toLowerCase();
+      }
+    });
+  } catch (_) {}
+
   const getUsernameFromPage = async () => {
     // 1. Direct profile URL
     if (window.location.pathname.startsWith("/@")) {
@@ -74,18 +90,49 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.inne
     if (loginCompletedDispatched) return;
     const path = window.location.pathname;
 
-    // While explicitly on /login or /signup input screens without redirect, let user enter credentials
-    if (path.includes("/login") || path.includes("/signup")) {
+    // While explicitly on /login or /signup or /logout input screens, wait for user input
+    if (path.includes("/login") || path.includes("/signup") || path.includes("/logout")) {
       return;
+    }
+
+    if (!expectedCreator) {
+      try {
+        const res = await chrome.storage.local.get(["expectedCreatorHandle"]);
+        if (res?.expectedCreatorHandle) {
+          expectedCreator = res.expectedCreatorHandle.replace("@", "").trim().toLowerCase();
+        }
+      } catch (_) {}
     }
 
     // When on feed, home, or profile after redirect:
     const u = await getUsernameFromPage();
     if (u) {
+      const cleanUser = u.toLowerCase().trim();
+
+      // If signed into wrong account, DO NOT auto-submit! Log out of wrong account immediately!
+      if (expectedCreator && cleanUser !== expectedCreator) {
+        console.warn(`LaunchIt: Detected @${cleanUser}, expected @${expectedCreator}. Wiping wrong session...`);
+        try {
+          chrome.runtime.sendMessage({
+            type: "TIKTOK_WRONG_ACCOUNT",
+            detected: cleanUser,
+            expected: expectedCreator
+          });
+        } catch (_) {}
+
+        // Navigate popup directly to logout to kill wrong session and show clean login form
+        window.location.href = `https://www.tiktok.com/logout#creator=${expectedCreator}`;
+        return;
+      }
+
+      // Verified genuine match with expected creator!
       loginCompletedDispatched = true;
       try {
-        chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED", username: u });
+        chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED", username: cleanUser });
       } catch (_) {}
+      setTimeout(() => {
+        try { window.close(); } catch (_) {}
+      }, 500);
     }
   };
 

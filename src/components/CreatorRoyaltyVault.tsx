@@ -63,7 +63,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
       const left = window.screen.width / 2 - width / 2;
       const top = window.screen.height / 2 - height / 2;
       fallbackPopup = window.open(
-        "https://www.tiktok.com/login",
+        `https://www.tiktok.com/login#creator=${cleanExpected}`,
         "TikTokLogin",
         `width=${width},height=${height},top=${top},left=${left}`
       );
@@ -189,9 +189,19 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
     setIsTikTokVerified(false);
     setVerifiedHandle(null);
     window.postMessage({ type: "LAUNCHIT_REQUEST_LOGOUT" }, "*");
+    const cleanExpected = creatorHandle.replace("@", "").trim();
+    const width = 550;
+    const height = 750;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    window.open(
+      `https://www.tiktok.com/logout#creator=${cleanExpected}`,
+      "TikTokLogin",
+      `width=${width},height=${height},top=${top},left=${left}`
+    );
     setTimeout(() => {
-      handleOpenTikTokSignIn();
-    }, 400);
+      setIsVerifying(false);
+    }, 1500);
   };
 
   const handleClaim = () => {
