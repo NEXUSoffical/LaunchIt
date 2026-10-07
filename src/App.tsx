@@ -7,6 +7,8 @@ import { TokenGrid } from "./components/TokenGrid";
 import { TradingTerminal } from "./components/TradingTerminal";
 import { CreateTokenModal } from "./components/CreateTokenModal";
 import { DeployGuideModal } from "./components/DeployGuideModal";
+import { LandingHomePage } from "./components/LandingHomePage";
+import { useAuth } from "./context/AuthContext";
 
 const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token | null } => {
   let stored: Token[] = [];
@@ -113,6 +115,7 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
 const parsedState = parseInitialState();
 
 export const App: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [tokens, setTokens] = useState<Token[]>(parsedState.initialTokens);
   const [trades, setTrades] = useState<Trade[]>(INITIAL_TRADES);
   const [selectedToken, setSelectedToken] = useState<Token | null>(parsedState.initialSelected);
@@ -184,6 +187,9 @@ export const App: React.FC = () => {
     }
   };
 
+  if (!isAuthenticated) {
+    return <LandingHomePage previewTokens={tokens} />;
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>

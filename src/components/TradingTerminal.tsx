@@ -8,6 +8,7 @@ import { HolderDistribution } from "./HolderDistribution";
 import { ArrowLeft, Copy, ExternalLink, Globe, Twitter, Send } from "lucide-react";
 
 import { CreatorRoyaltyVault } from "./CreatorRoyaltyVault";
+import { CoinCommunityHub } from "./CoinCommunityHub";
 
 interface TradingTerminalProps {
   token: Token;
@@ -156,6 +157,7 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
         {/* Left Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <PriceChart token={token} />
+          <CoinCommunityHub token={token} />
           <TradeHistory trades={trades.filter((t) => t.mint === token.mint)} tokenSymbol={token.symbol} />
         </div>
 

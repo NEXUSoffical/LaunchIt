@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Token } from "../types";
 import { Coins, CheckCircle2, ShieldCheck, ArrowRight, X, ExternalLink, Sparkles, User, Zap } from "lucide-react";
 
@@ -16,6 +16,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const [isClaiming, setIsClaiming] = useState(false);
   const [isTikTokVerified, setIsTikTokVerified] = useState(false);
   const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
+  const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
   const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -146,23 +147,26 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         setIsVerifying(false);
 
         const res = event.data;
-        if (res.success) {
-          const detected = (res.username || "").toLowerCase().trim();
-          if (detected === cleanExpected.toLowerCase()) {
-            setIsTikTokVerified(true);
-            setVerifiedHandle(`@${detected}`);
-            setAuthError(null);
-          } else {
-            setIsTikTokVerified(false);
-            setAuthError(
-              `Access Denied: You are signed into TikTok as @${detected}, but this royalty vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
-            );
-          }
+        const detected = (res.username || res.detectedUsername || "").toLowerCase().trim();
+        if (detected) {
+          setDetectedAccount(detected);
+        }
+
+        if (res.success && detected === cleanExpected.toLowerCase()) {
+          setIsTikTokVerified(true);
+          setVerifiedHandle(`@${detected}`);
+          setAuthError(null);
         } else {
           setIsTikTokVerified(false);
-          setAuthError(
-            res.error || `Verification failed. Please sign into @${cleanExpected} on TikTok.`
-          );
+          if (detected) {
+            setAuthError(
+              `You are currently signed into TikTok as @${detected}, but this royalty vault belongs strictly to ${creatorHandle}. Please switch accounts to ${creatorHandle} to claim.`
+            );
+          } else {
+            setAuthError(
+              res.error || `No active TikTok login detected in your browser. Please sign into ${creatorHandle} on TikTok.`
+            );
+          }
         }
       }
     };
@@ -182,6 +186,12 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
       "*"
     );
   };
+
+  useEffect(() => {
+    if (claimType === "creator" && !isTikTokVerified) {
+      handleDirectVerify();
+    }
+  }, [claimType]);
 
   const handleLogoutTikTok = () => {
     setAuthError(null);
@@ -430,43 +440,55 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
                 {/* Step 1: Real TikTok Sign-in Verification */}
                 {!isTikTokVerified ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#cbd5e1" }}>
-                      To claim royalties, sign into the TikTok account that made this video:{" "}
-                      <b style={{ color: "#14f195" }}>{creatorHandle}</b>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {/* Status Overview Card */}
+                    <div
+                      style={{
+                        background: "rgba(255, 255, 255, 0.04)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        borderRadius: "14px",
+                        padding: "16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Target Creator Account:</span>
+                        <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#14f195" }}>{creatorHandle}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Active TikTok in Chrome:</span>
+                        <span
+                          style={{
+                            fontSize: "0.95rem",
+                            fontWeight: 700,
+                            color: detectedAccount
+                              ? detectedAccount === creatorHandle.replace("@", "").trim().toLowerCase()
+                                ? "#14f195"
+                                : "#fca5a5"
+                              : "#94a3b8",
+                          }}
+                        >
+                          {detectedAccount ? `@${detectedAccount}` : isVerifying ? "Detecting..." : "None Detected"}
+                        </span>
+                      </div>
                     </div>
 
                     {authError && (
                       <div
                         style={{
-                          background: "rgba(239, 68, 68, 0.15)",
-                          border: "1px solid rgba(239, 68, 68, 0.5)",
-                          borderRadius: "10px",
-                          padding: "12px 14px",
+                          background: "rgba(239, 68, 68, 0.12)",
+                          border: "1px solid rgba(239, 68, 68, 0.4)",
+                          borderRadius: "12px",
+                          padding: "14px",
                           color: "#fca5a5",
                           fontSize: "0.85rem",
-                          lineHeight: 1.4,
+                          lineHeight: 1.5,
                         }}
                       >
-                        <div style={{ fontWeight: 700 }}>❌ Verification Denied</div>
-                        <div style={{ marginTop: "4px" }}>{authError}</div>
-                        <button
-                          type="button"
-                          onClick={handleLogoutTikTok}
-                          style={{
-                            marginTop: "10px",
-                            background: "rgba(255, 96, 0, 0.2)",
-                            border: "1px solid #ff8c37",
-                            color: "#ff8c37",
-                            borderRadius: "8px",
-                            padding: "6px 12px",
-                            fontSize: "0.75rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Log Out & Switch TikTok Account
-                        </button>
+                        <div style={{ fontWeight: 800, marginBottom: "4px" }}>⚠️ Account Mismatch / Switch Required</div>
+                        <div>{authError}</div>
                       </div>
                     )}
 

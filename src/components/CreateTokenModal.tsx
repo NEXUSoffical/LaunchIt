@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Token } from "../types";
 import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../context/AuthContext";
 import { X, Sparkles, ShieldCheck, Zap, Video, Link2, Share2, CheckCircle2 } from "lucide-react";
 
 interface CreateTokenModalProps {
@@ -15,6 +16,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
   onTokenCreated,
 }) => {
   const { balance, deductSol, updateTokenBalance } = useWallet();
+  const { currentUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"social" | "manual">("social");
 
@@ -96,7 +98,10 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
       symbol: symbol.toUpperCase(),
       description: description || "Launched on LaunchIt.",
       image: finalImg,
-      creator: "You (Sol9...8jE1)",
+      creator: currentUser ? `@${currentUser.username}` : "You (Sol9...8jE1)",
+      creatorHandle: currentUser ? `@${currentUser.username}` : undefined,
+      launcherHandle: currentUser ? `@${currentUser.username}` : undefined,
+      launcherWallet: currentUser?.solanaWallet || null,
       marketCapSol: 30.0 + realSol,
       marketCapUsd: (30.0 + realSol) * 150,
       priceSol: 0.00000003,

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useAuth } from "./AuthContext";
 
 interface WalletContextType {
   connected: boolean;
@@ -19,17 +20,32 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser, updateUserBalance, updateUserTokens } = useAuth();
+
   const [connected, setConnected] = useState<boolean>(true);
-  const [publicKey, setPublicKey] = useState<string | null>("Sol9GenesisVauLtX82n7k4mW1pL3qB5c0uM4qD8jE1");
-  const [balance, setBalance] = useState<number>(14.5);
+  const [publicKey, setPublicKey] = useState<string | null>(
+    currentUser?.solanaWallet || "Sol9GenesisVauLtX82n7k4mW1pL3qB5c0uM4qD8jE1"
+  );
+  const [balance, setBalance] = useState<number>(currentUser?.balanceSol ?? 0.0);
   const [network, setNetwork] = useState<"devnet" | "mainnet-beta">("devnet");
   const [isAirdropping, setIsAirdropping] = useState<boolean>(false);
-  const [userTokens, setUserTokens] = useState<Record<string, number>>({
-    "GenX7K9pQ5bWmR4v1k8Zs3nLe2YtF6aC0uM4qD8jE1oP": 45_000_000,
-  });
+  const [userTokens, setUserTokens] = useState<Record<string, number>>(
+    currentUser?.userTokens || {}
+  );
+
+  // Sync wallet state with currentUser
+  useEffect(() => {
+    if (currentUser) {
+      setPublicKey(currentUser.solanaWallet);
+      setBalance(currentUser.balanceSol);
+      if (currentUser.userTokens) {
+        setUserTokens(currentUser.userTokens);
+      }
+      setConnected(true);
+    }
+  }, [currentUser]);
 
   const connect = async () => {
-    // Check if phantom / solana is available on window
     const solanaWindow = (window as unknown as { solana?: { isPhantom?: boolean; connect: () => Promise<{ publicKey: { toString: () => string } }> } });
     if (solanaWindow?.solana?.isPhantom) {
       try {
@@ -38,12 +54,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setConnected(true);
         return;
       } catch (err) {
-        console.warn("Phantom connection rejected, using test wallet:", err);
+        console.warn("Phantom connection rejected, using account wallet:", err);
       }
     }
 
-    // Default fast-connect wallet for instant test UX
-    setPublicKey("Sol9GenesisVauLtX82n7k4mW1pL3qB5c0uM4qD8jE1");
+    if (currentUser) {
+      setPublicKey(currentUser.solanaWallet);
+    } else {
+      setPublicKey("Sol9GenesisVauLtX82n7k4mW1pL3qB5c0uM4qD8jE1");
+    }
     setConnected(true);
   };
 
@@ -54,20 +73,25 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const requestAirdrop = async () => {
     setIsAirdropping(true);
-    // Simulates or executes devnet airdrop
     await new Promise((resolve) => setTimeout(resolve, 800));
-    setBalance((prev) => prev + 1.0);
+    const newBal = balance + 1.0;
+    setBalance(newBal);
+    updateUserBalance(1.0, true);
     setIsAirdropping(false);
   };
 
   const deductSol = (amount: number): boolean => {
     if (balance < amount) return false;
-    setBalance((prev) => Math.max(0, prev - amount));
+    const newBal = Math.max(0, balance - amount);
+    setBalance(newBal);
+    updateUserBalance(newBal, false);
     return true;
   };
 
   const addSol = (amount: number) => {
-    setBalance((prev) => prev + amount);
+    const newBal = balance + amount;
+    setBalance(newBal);
+    updateUserBalance(newBal, false);
   };
 
   const updateTokenBalance = (mint: string, deltaTokens: number) => {
@@ -76,6 +100,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const updated = Math.max(0, current + deltaTokens);
       return { ...prev, [mint]: updated };
     });
+    updateUserTokens(mint, deltaTokens);
   };
 
   return (
