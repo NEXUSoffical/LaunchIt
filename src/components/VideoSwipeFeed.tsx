@@ -253,6 +253,26 @@ const SlideTradePanel: React.FC<{
                 <span style={{ fontSize: "1rem", fontWeight: 800, color: "#ffffff" }}>
                   {token.name}
                 </span>
+                {(token.mint === "4akoUeUJcay3tQUc3BJbqGtaCwPanZ12xm7dLaunchit" ||
+                  token.symbol.trim().toUpperCase() === "LAUNCHIT") && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      background: "linear-gradient(135deg, rgba(255, 96, 0, 0.25), rgba(245, 158, 11, 0.25))",
+                      border: "1px solid #f59e0b",
+                      color: "#fbbf24",
+                      fontSize: "0.7rem",
+                      fontWeight: 800,
+                    }}
+                  >
+                    <Crown size={11} />
+                    <span>OFFICIAL PINNED #1</span>
+                  </span>
+                )}
                 {token.creatorHandle && (
                   <span style={{ fontSize: "0.75rem", color: "var(--solana-cyan)", fontWeight: 600 }}>
                     • {token.creatorHandle.startsWith("@") ? token.creatorHandle : `@${token.creatorHandle}`}

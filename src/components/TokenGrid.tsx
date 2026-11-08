@@ -38,7 +38,18 @@ export const TokenGrid: React.FC<TokenGridProps> = ({
     return true;
   });
 
+  const OFFICIAL_LAUNCHIT_MINT = "4akoUeUJcay3tQUc3BJbqGtaCwPanZ12xm7dLaunchit";
+
+  const isOfficialLaunchIt = (t: Token) =>
+    t.mint === OFFICIAL_LAUNCHIT_MINT || t.symbol.trim().toUpperCase() === "LAUNCHIT";
+
   const sortedTokens = [...filteredTokens].sort((a, b) => {
+    // Always pin the official $LAUNCHIT coin #1 first in the Video Scroll & Grid feeds
+    const aPinned = isOfficialLaunchIt(a);
+    const bPinned = isOfficialLaunchIt(b);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+
     if (activeTab === "trending") {
       const scoreA = a.volume24hSol + (a.likes?.length || 0) * 0.25 + (a.repliesCount || 0) * 0.1;
       const scoreB = b.volume24hSol + (b.likes?.length || 0) * 0.25 + (b.repliesCount || 0) * 0.1;

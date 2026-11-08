@@ -224,7 +224,7 @@ export async function recoverFromSolanaChain() {
     }
 
     if (changed) {
-      store.tokens.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      sortTokensWithOfficialFirst(store.tokens);
       store.trades.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       saveStore(store);
     }
@@ -233,7 +233,18 @@ export async function recoverFromSolanaChain() {
   return store;
 }
 
+const OFFICIAL_LAUNCHIT_MINT = "4akoUeUJcay3tQUc3BJbqGtaCwPanZ12xm7dLaunchit";
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,90}$/;
+
+function sortTokensWithOfficialFirst(tokens) {
+  tokens.sort((a, b) => {
+    const aPin = a.mint === OFFICIAL_LAUNCHIT_MINT || String(a.symbol || "").trim().toUpperCase() === "LAUNCHIT";
+    const bPin = b.mint === OFFICIAL_LAUNCHIT_MINT || String(b.symbol || "").trim().toUpperCase() === "LAUNCHIT";
+    if (aPin && !bPin) return -1;
+    if (!aPin && bPin) return 1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+}
 const ipRateLimits = new Map();
 
 function isValidSolanaAddress(addr) {
@@ -363,7 +374,7 @@ export function applyDbAction(action, payload) {
     } else {
       store.tokens.unshift(sanitized);
     }
-    store.tokens.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    sortTokensWithOfficialFirst(store.tokens);
     saveStore(store);
   } else if (action === "ADD_TRADE" && payload?.trade?.id) {
     const trade = payload.trade;
@@ -491,7 +502,7 @@ export function applyDbAction(action, payload) {
           }
         }
       }
-      store.tokens.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      sortTokensWithOfficialFirst(store.tokens);
     }
     if (Array.isArray(payload.trades)) {
       for (const tr of payload.trades.slice(0, 200)) {
