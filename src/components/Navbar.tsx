@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [handleInput, setHandleInput] = useState("");
 
-  const OFFICIAL_CA = "8vgKahfq4WHSqeQx9rxW5jakcnNEoC1uPz7gFNjxpump";
+  const OFFICIAL_CA = "5fQERkgGuwGH6ix5xANkQxgdcDwrns5WWMvxTHAU8ytx";
 
   const handleCopyOfficialCa = () => {
     navigator.clipboard.writeText(OFFICIAL_CA);
@@ -134,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
           <a
-            href={`https://pump.fun/coin/${OFFICIAL_CA}`}
+            href={`https://stonkfun.xyz/token/${OFFICIAL_CA}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -150,7 +150,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               textDecoration: "none",
             }}
           >
-            <span>Buy $LAUNCHIT on Pump.fun</span>
+            <span>Buy $LAUNCHIT on Stonk</span>
+            <ExternalLink size={11} />
+          </a>
+          <a
+            href={`https://dexscreener.com/solana/${OFFICIAL_CA}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 10px",
+              borderRadius: "6px",
+              background: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.16)",
+              color: "#e2e8f0",
+              fontWeight: 700,
+              fontSize: "0.74rem",
+              textDecoration: "none",
+            }}
+          >
+            <span>DexScreener</span>
             <ExternalLink size={11} />
           </a>
         </div>

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Token } from "../types";
 
-const OFFICIAL_LAUNCHIT_CA = "8vgKahfq4WHSqeQx9rxW5jakcnNEoC1uPz7gFNjxpump";
+const OFFICIAL_LAUNCHIT_CA = "5fQERkgGuwGH6ix5xANkQxgdcDwrns5WWMvxTHAU8ytx";
 
 interface LandingHomePageProps {
   previewTokens?: Token[];
@@ -218,7 +218,7 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                 )}
               </button>
               <a
-                href={`https://pump.fun/coin/${OFFICIAL_LAUNCHIT_CA}`}
+                href={`https://stonkfun.xyz/token/${OFFICIAL_LAUNCHIT_CA}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-primary"
@@ -228,7 +228,21 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                   textDecoration: "none",
                 }}
               >
-                <span>Buy $LAUNCHIT on Pump.fun</span>
+                <span>Buy $LAUNCHIT on Stonk</span>
+                <ExternalLink size={13} />
+              </a>
+              <a
+                href={`https://dexscreener.com/solana/${OFFICIAL_LAUNCHIT_CA}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+                style={{
+                  padding: "7px 12px",
+                  fontSize: "0.8rem",
+                  textDecoration: "none",
+                }}
+              >
+                <span>DexScreener</span>
                 <ExternalLink size={13} />
               </a>
             </div>
