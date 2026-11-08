@@ -49,8 +49,12 @@ export function getInjectedSolanaProvider(): any {
 
 export function createMemoInstruction(memoText: string, signer: PublicKey): TransactionInstruction {
   const data = new TextEncoder().encode(memoText);
+  const keys = [{ pubkey: signer, isSigner: true, isWritable: false }];
+  if (!signer.equals(LAUNCHIT_TREASURY_PUBKEY)) {
+    keys.push({ pubkey: LAUNCHIT_TREASURY_PUBKEY, isSigner: false, isWritable: false });
+  }
   return new TransactionInstruction({
-    keys: [{ pubkey: signer, isSigner: true, isWritable: false }],
+    keys,
     programId: MEMO_PROGRAM_ID,
     data: data as any,
   });
@@ -129,6 +133,8 @@ export async function deployTokenOnChain(params: {
   symbol: string;
   uri: string;
   initialBuySol: number;
+  videoUrl?: string;
+  launcherHandle?: string;
 }): Promise<{
   mintAddress: string;
   txSignature: string;
@@ -206,6 +212,11 @@ export async function deployTokenOnChain(params: {
     mint: mintPubkey.toBase58(),
     ticker: params.symbol.toUpperCase(),
     name: params.name.slice(0, 32),
+    launcher: payerPubkey.toBase58(),
+    handle: params.launcherHandle || undefined,
+    video: params.videoUrl ? params.videoUrl.slice(0, 140) : undefined,
+    img: params.uri && params.uri.startsWith("http") ? params.uri.slice(0, 120) : undefined,
+    buy: params.initialBuySol > 0 ? Number(params.initialBuySol.toFixed(4)) : 0,
   });
   tx.add(createMemoInstruction(memoPayload, payerPubkey));
 

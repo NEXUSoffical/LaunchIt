@@ -102,6 +102,8 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
         symbol: symbol.toUpperCase(),
         uri: finalImg,
         initialBuySol: initialBuy,
+        videoUrl: videoUrl.trim() || undefined,
+        launcherHandle: currentUser ? `@${currentUser.username}` : scrapedCreator || undefined,
       });
 
       if (initialBuy > 0) {

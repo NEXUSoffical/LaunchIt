@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { applyDbAction } from "./api/launchit-db.js";
+import { applyDbAction, recoverFromSolanaChain } from "./api/launchit-db.js";
 
 function launchitDbMiddleware() {
   return {
     name: "launchit-shared-db-middleware",
     configureServer(server: any) {
-      server.middlewares.use("/api/launchit-db", (req: any, res: any) => {
+      server.middlewares.use("/api/launchit-db", async (req: any, res: any) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -17,6 +17,8 @@ function launchitDbMiddleware() {
           res.end();
           return;
         }
+
+        await recoverFromSolanaChain();
 
         if (req.method === "GET") {
           const store = applyDbAction("NONE", null);
