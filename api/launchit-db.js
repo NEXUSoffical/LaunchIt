@@ -252,7 +252,7 @@ function sanitizeText(str, maxLen = 300) {
 function sanitizeSafeUrl(url, fallback = "") {
   if (typeof url !== "string") return fallback;
   const trimmed = url.trim();
-  if (trimmed === "/logo.jpg") return trimmed;
+  if (trimmed === "/logo.jpg" || trimmed === "/launchit-rocket.mp4") return trimmed;
   if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(trimmed) && trimmed.length < 350_000) {
     return trimmed;
   }

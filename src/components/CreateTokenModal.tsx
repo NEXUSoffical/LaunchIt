@@ -321,6 +321,50 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
                 />
               </div>
 
+              <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rocketUrl = "https://www.launchit.world/launchit-rocket.mp4";
+                    setVideoUrl(rocketUrl);
+                    if (!name) setName("LaunchIt");
+                    if (!symbol) setSymbol("LAUNCHIT");
+                    if (!description) {
+                      setDescription(
+                        "Stop buying boring static pictures. Watch & trade real viral video memes live on Solana at https://www.launchit.world — 0 SOL launch fee, 0.5% launcher royalties."
+                      );
+                    }
+                    setPreviewThumbnail("/logo.jpg");
+                    setTwitter("https://x.com/seeItLaunchIt");
+                    setWebsite("https://www.launchit.world");
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "8px",
+                    background: "rgba(255, 96, 0, 0.16)",
+                    border: "1px solid rgba(255, 96, 0, 0.45)",
+                    color: "#ff8c37",
+                    fontSize: "0.76rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  🚀 1-Click Fill: Official $LAUNCHIT Rocket Takeoff Video
+                </button>
+                <a
+                  href="/launchit-rocket.mp4"
+                  download="launchit-rocket.mp4"
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--solana-green)",
+                    fontWeight: 700,
+                    textDecoration: "underline",
+                  }}
+                >
+                  ⬇ Download Rocket MP4 for X
+                </a>
+              </div>
+
               {detectedPlatform && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
                   <span className="badge badge-green">
