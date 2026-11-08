@@ -47,8 +47,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
   const [copiedAddr, setCopiedAddr] = useState(false);
+  const [copiedOfficialCa, setCopiedOfficialCa] = useState(false);
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [handleInput, setHandleInput] = useState("");
+
+  const OFFICIAL_CA = "8vgKahfq4WHSqeQx9rxW5jakcnNEoC1uPz7gFNjxpump";
+
+  const handleCopyOfficialCa = () => {
+    navigator.clipboard.writeText(OFFICIAL_CA);
+    setCopiedOfficialCa(true);
+    setTimeout(() => setCopiedOfficialCa(false), 1800);
+  };
 
   const shortAddr = publicKey
     ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
@@ -75,6 +84,78 @@ export const Navbar: React.FC<NavbarProps> = ({
         zIndex: 100,
       }}
     >
+      {/* Official $LAUNCHIT Contract Address Banner */}
+      <div
+        style={{
+          background: "linear-gradient(90deg, rgba(255, 96, 0, 0.18) 0%, rgba(20, 241, 149, 0.14) 50%, rgba(255, 96, 0, 0.18) 100%)",
+          borderBottom: "1px solid rgba(255, 96, 0, 0.35)",
+          padding: "7px 14px",
+        }}
+      >
+        <div
+          className="container"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+            fontSize: "0.78rem",
+          }}
+        >
+          <span style={{ fontWeight: 800, color: "#ff8c37", letterSpacing: "0.3px" }}>
+            🔥 OFFICIAL $LAUNCHIT CA:
+          </span>
+          <button
+            type="button"
+            onClick={handleCopyOfficialCa}
+            title="Click to copy official $LAUNCHIT Contract Address"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "3px 10px",
+              borderRadius: "6px",
+              background: "rgba(5, 7, 13, 0.78)",
+              border: "1px solid rgba(20, 241, 149, 0.45)",
+              color: "var(--solana-green)",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: "0.76rem",
+            }}
+          >
+            <span className="mono">{OFFICIAL_CA}</span>
+            {copiedOfficialCa ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#14f195" }}>
+                <Check size={12} /> Copied!
+              </span>
+            ) : (
+              <Copy size={12} color="#94a3b8" />
+            )}
+          </button>
+          <a
+            href={`https://pump.fun/coin/${OFFICIAL_CA}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 10px",
+              borderRadius: "6px",
+              background: "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)",
+              color: "#ffffff",
+              fontWeight: 800,
+              fontSize: "0.74rem",
+              textDecoration: "none",
+            }}
+          >
+            <span>Buy $LAUNCHIT on Pump.fun</span>
+            <ExternalLink size={11} />
+          </a>
+        </div>
+      </div>
+
       <div
         className="container"
         style={{

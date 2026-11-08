@@ -11,8 +11,13 @@ import {
   CheckCircle2,
   Flame,
   Wallet,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react";
 import { Token } from "../types";
+
+const OFFICIAL_LAUNCHIT_CA = "8vgKahfq4WHSqeQx9rxW5jakcnNEoC1uPz7gFNjxpump";
 
 interface LandingHomePageProps {
   previewTokens?: Token[];
@@ -24,6 +29,13 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
   const [preferredHandle, setPreferredHandle] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [copiedCa, setCopiedCa] = useState(false);
+
+  const handleCopyCa = () => {
+    navigator.clipboard.writeText(OFFICIAL_LAUNCHIT_CA);
+    setCopiedCa(true);
+    setTimeout(() => setCopiedCa(false), 1800);
+  };
 
   const handleWalletConnect = async (provider: WalletProviderName) => {
     setErrorMessage(null);
@@ -150,12 +162,76 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                 color: "var(--text-secondary)",
                 lineHeight: 1.6,
                 maxWidth: "740px",
-                margin: "0 auto 28px",
+                margin: "0 auto 24px",
               }}
             >
-              LaunchIt is the social headquarters for viral memecoins: launch tokens straight from TikTok in 1 click,
-              earn 1% coin launcher royalties on every trade, post investment theses, and trade on Solana bonding curves.
+              LaunchIt is the social headquarters for viral video memecoins: launch tokens straight from TikTok, YouTube & X in 1 click,
+              earn 0.5% coin launcher royalties on every trade, and watch & trade viral videos live on Solana.
             </p>
+
+            {/* Official $LAUNCHIT Contract Address Box */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: "10px",
+                padding: "12px 18px",
+                borderRadius: "14px",
+                background: "rgba(14, 19, 29, 0.92)",
+                border: "1.5px solid rgba(255, 96, 0, 0.55)",
+                boxShadow: "0 0 28px rgba(255, 96, 0, 0.22)",
+                margin: "0 auto 12px",
+              }}
+            >
+              <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#ff8c37" }}>
+                🔥 OFFICIAL $LAUNCHIT CA:
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyCa}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 12px",
+                  borderRadius: "8px",
+                  background: "rgba(5, 7, 13, 0.9)",
+                  border: "1px solid rgba(20, 241, 149, 0.45)",
+                  color: "var(--solana-green)",
+                  cursor: "pointer",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                }}
+                title="Copy $LAUNCHIT Contract Address"
+              >
+                <span className="mono" style={{ wordBreak: "break-all" }}>
+                  {OFFICIAL_LAUNCHIT_CA}
+                </span>
+                {copiedCa ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#14f195" }}>
+                    <Check size={14} /> Copied
+                  </span>
+                ) : (
+                  <Copy size={14} color="#94a3b8" />
+                )}
+              </button>
+              <a
+                href={`https://pump.fun/coin/${OFFICIAL_LAUNCHIT_CA}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary"
+                style={{
+                  padding: "7px 14px",
+                  fontSize: "0.8rem",
+                  textDecoration: "none",
+                }}
+              >
+                <span>Buy $LAUNCHIT on Pump.fun</span>
+                <ExternalLink size={13} />
+              </a>
+            </div>
           </div>
 
           {/* Wallet Connect Auth Portal Box */}
