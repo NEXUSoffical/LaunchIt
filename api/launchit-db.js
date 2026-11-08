@@ -169,6 +169,13 @@ export async function recoverFromSolanaChain() {
           changed = true;
         }
       } else if ((memo.op === "buy" || memo.op === "sell") && memo.mint && sigInfo.signature) {
+        // Exclude the looped test transactions where funds never entered the vault
+        if (
+          sigInfo.signature === "3jyAoDi4uE1ANjK555i6qkyZ9Wsmn7U9KnogJUoJPpPDopdNuFnFdtakVfUCmUM8YwM9PucmECobYDDeEHoontpJ" ||
+          sigInfo.signature === "2YdxWeJehBozfv1EkoJFkcCp3xo7yLxPBUgDpQDuYepKeh1fLYSUHpbwTbNkwSBrCdUjiHsD6iNECucwny9xh5b"
+        ) {
+          continue;
+        }
         const tradeExists = store.trades.some(
           (tr) => tr.txHash === sigInfo.signature || tr.id === `chain-${sigInfo.signature.slice(0, 12)}`
         );
