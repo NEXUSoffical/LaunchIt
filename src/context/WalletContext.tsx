@@ -184,6 +184,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const requestAirdrop = async () => {
+    if (network === "mainnet-beta") {
+      return;
+    }
     setIsAirdropping(true);
     let txSig = `5Sol${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}x9`;
 

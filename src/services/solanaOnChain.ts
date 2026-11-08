@@ -277,6 +277,10 @@ export async function executeTradeOnChain(params: {
     await provider.connect();
   }
 
+  if (!Number.isFinite(params.solAmount) || params.solAmount <= 0 || params.solAmount > 1000) {
+    throw new Error("Invalid trade amount.");
+  }
+
   const payerPubkey: PublicKey = provider.publicKey;
   const connection = await getWorkingConnection(params.network);
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
@@ -395,6 +399,7 @@ export async function claimRoyaltiesOnChain(params: {
   role: "creator" | "launcher";
   claimSolAmount: number;
   payoutWallet: string;
+  expectedLauncherWallet?: string | null;
 }): Promise<{
   txSignature: string;
   signerWallet: string;
@@ -409,6 +414,14 @@ export async function claimRoyaltiesOnChain(params: {
   }
 
   const payerPubkey: PublicKey = provider.publicKey;
+  if (
+    params.expectedLauncherWallet &&
+    payerPubkey.toBase58() !== params.expectedLauncherWallet
+  ) {
+    throw new Error(
+      `Security Check Failed: Connected wallet (${payerPubkey.toBase58().slice(0, 6)}...) is not the registered Coin Launcher wallet (${params.expectedLauncherWallet.slice(0, 6)}...).`
+    );
+  }
   const connection = await getWorkingConnection(params.network);
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
 

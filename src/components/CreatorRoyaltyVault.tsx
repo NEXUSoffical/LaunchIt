@@ -31,27 +31,21 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const [claimSuccessTx, setClaimSuccessTx] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // 100% of the 1% royalty goes to the Coin Launcher
+  // 0.5% of every trade goes to the Coin Launcher
   const launcherSol = (token.unclaimedLauncherFeesSol || 0) + (token.unclaimedCreatorFeesSol || 0);
   const connectedWallet = publicKey || currentUser?.solanaWallet || "";
-  const connectedHandle = currentUser?.username ? `@${currentUser.username.toLowerCase()}` : "";
 
+  // SECURITY: Strictly verify cryptographic Solana wallet address match ONLY.
+  // Never authorize royalty claims based on mutable usernames/handles.
   const isAuthorizedLauncher = (): boolean => {
-    if (token.launcherWallet && connectedWallet && token.launcherWallet === connectedWallet) {
-      return true;
+    if (!token.launcherWallet || !connectedWallet) {
+      return false;
     }
-    if (
-      token.launcherHandle &&
-      connectedHandle &&
-      token.launcherHandle.toLowerCase() === connectedHandle
-    ) {
-      return true;
-    }
-    return !token.launcherWallet;
+    return token.launcherWallet === connectedWallet;
   };
 
   const handleOpenClaimModal = () => {
-    setPayoutAddress(publicKey || currentUser?.solanaWallet || "");
+    setPayoutAddress(token.launcherWallet || publicKey || currentUser?.solanaWallet || "");
     setClaimSuccessTx(null);
     setAuthError(null);
     setIsModalOpen(true);
@@ -61,7 +55,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
     e.preventDefault();
     setAuthError(null);
 
-    const targetWallet = (payoutAddress || connectedWallet).trim();
+    const targetWallet = (token.launcherWallet || payoutAddress || connectedWallet).trim();
     if (!targetWallet || targetWallet.length < 32) {
       setAuthError("Please connect your wallet or enter a valid Solana wallet address.");
       return;
@@ -69,9 +63,11 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
     if (!isAuthorizedLauncher()) {
       setAuthError(
-        `Connected wallet (${connectedWallet.slice(0, 6)}...) does not match the Coin Launcher (${
-          token.launcherWallet?.slice(0, 6) || token.launcherHandle || "record"
-        }).`
+        `Access Denied: Only the original Coin Launcher wallet (${
+          token.launcherWallet
+            ? `${token.launcherWallet.slice(0, 6)}...${token.launcherWallet.slice(-4)}`
+            : "unassigned"
+        }) can sign to claim royalties for $${token.symbol}.`
       );
       return;
     }
@@ -84,7 +80,8 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         symbol: token.symbol,
         role: "launcher",
         claimSolAmount: launcherSol,
-        payoutWallet: targetWallet,
+        payoutWallet: token.launcherWallet || targetWallet,
+        expectedLauncherWallet: token.launcherWallet,
       });
 
       if (launcherSol > 0) {
@@ -97,8 +94,8 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
 
       const updatedToken: Token = {
         ...token,
-        feeSplit: "launcher_100",
-        launcherWallet: targetWallet,
+        feeSplit: "split_50_50",
+        launcherWallet: token.launcherWallet || targetWallet,
         unclaimedLauncherFeesSol: 0,
         unclaimedCreatorFeesSol: 0,
         claimedLauncherFeesSol: (token.claimedLauncherFeesSol || 0) + launcherSol,
