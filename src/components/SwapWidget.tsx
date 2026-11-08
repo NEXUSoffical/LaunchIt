@@ -119,11 +119,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         const mc = { sol: newSpotPrice * 1_000_000_000, usd: newSpotPrice * 1_000_000_000 * 150 };
 
         const totalFeeBuy = solVal * 0.01;
-        const split = token.feeSplit || "split_50_50";
-        const creatorFeeBuy =
-          split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeBuy : totalFeeBuy * 0.5;
-        const launcherFeeBuy =
-          split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeBuy : totalFeeBuy * 0.5;
+        const launcherFeeBuy = totalFeeBuy;
 
         const updatedToken: Token = {
           ...token,
@@ -135,7 +131,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           marketCapSol: mc.sol,
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + solVal,
-          unclaimedCreatorFeesSol: (token.unclaimedCreatorFeesSol || 0) + creatorFeeBuy,
+          feeSplit: "launcher_100",
           unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeBuy,
         };
 
@@ -242,11 +238,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         const mc = { sol: newSpotPrice * 1_000_000_000, usd: newSpotPrice * 1_000_000_000 * 150 };
 
         const totalFeeSell = solReceived * 0.01;
-        const split = token.feeSplit || "split_50_50";
-        const creatorFeeSell =
-          split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeSell : totalFeeSell * 0.5;
-        const launcherFeeSell =
-          split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeSell : totalFeeSell * 0.5;
+        const launcherFeeSell = totalFeeSell;
 
         const updatedToken: Token = {
           ...token,
@@ -258,7 +250,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           marketCapSol: mc.sol,
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + solReceived,
-          unclaimedCreatorFeesSol: (token.unclaimedCreatorFeesSol || 0) + creatorFeeSell,
+          feeSplit: "launcher_100",
           unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeSell,
         };
 
@@ -499,26 +491,21 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
             </div>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "8px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 paddingTop: "6px",
                 borderTop: "1px dashed rgba(255, 255, 255, 0.08)",
                 fontSize: "0.72rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#14f195" }}>
-                <span>👑</span>
-                <span>
-                  <b>0.5%</b> Creator Vault
-                </span>
-              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#ff8c37" }}>
                 <span>🚀</span>
                 <span>
-                  <b>0.5%</b> Launcher Vault
+                  <b>1%</b> Coin Launcher Royalty
                 </span>
               </div>
+              <span style={{ color: "var(--text-muted)" }}>100% to Coin Launcher</span>
             </div>
           </div>
         </div>
@@ -619,26 +606,21 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
             </div>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "8px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 paddingTop: "6px",
                 borderTop: "1px dashed rgba(255, 255, 255, 0.08)",
                 fontSize: "0.72rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#14f195" }}>
-                <span>👑</span>
-                <span>
-                  <b>0.5%</b> Creator Vault
-                </span>
-              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#ff8c37" }}>
                 <span>🚀</span>
                 <span>
-                  <b>0.5%</b> Launcher Vault
+                  <b>1%</b> Coin Launcher Royalty
                 </span>
               </div>
+              <span style={{ color: "var(--text-muted)" }}>100% to Coin Launcher</span>
             </div>
           </div>
         </div>

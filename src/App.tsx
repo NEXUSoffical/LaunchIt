@@ -118,7 +118,7 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
         })(),
         launcherHandle: params.get("launcher_handle") ? safeDecode(params.get("launcher_handle")!).toLowerCase() : undefined,
         launcherWallet: params.get("launcher_wallet") ? safeDecode(params.get("launcher_wallet")!) : null,
-        feeSplit: (params.get("fee_split") as any) || "split_50_50",
+        feeSplit: "launcher_100",
         unclaimedCreatorFeesSol: 0,
         unclaimedLauncherFeesSol: 0,
         claimedCreatorFeesSol: 0,

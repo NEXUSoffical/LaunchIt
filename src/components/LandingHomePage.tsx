@@ -154,7 +154,7 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
               }}
             >
               LaunchIt is the social headquarters for viral memecoins: launch tokens straight from TikTok in 1 click,
-              earn 50/50 creator & launcher royalties, post investment theses, and trade on Solana bonding curves.
+              earn 1% coin launcher royalties on every trade, post investment theses, and trade on Solana bonding curves.
             </p>
           </div>
 
@@ -462,8 +462,8 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                 TikTok "See It, Launch It"
               </h3>
               <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Turn viral videos into live tokens in 1-click without any upfront capital. Full royalty
-                shares are held for creators & launchers in the Royalty Vault.
+                Turn viral videos into live tokens in 1-click. 100% of the 1% trading royalty on every buy and sell
+                goes directly to the Coin Launcher in the Royalty Vault.
               </p>
             </div>
 

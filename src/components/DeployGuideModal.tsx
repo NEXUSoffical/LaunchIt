@@ -157,11 +157,11 @@ export const DeployGuideModal: React.FC<DeployGuideModalProps> = ({ isOpen, onCl
                 <Crown size={16} />
               </div>
               <h4 style={{ fontSize: "0.98rem", fontWeight: 800 }}>
-                3. 1% Creator & Launcher Royalty Vaults
+                3. 1% Coin Launcher Royalty Vault (100% to You)
               </h4>
             </div>
             <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", lineHeight: "1.5" }}>
-              Every buy and sell on the bonding curve routes a <b>1% royalty fee</b> into on-chain vaults—split <b>50/50 (0.5% to the Video Creator, 0.5% to the Coin Launcher)</b> so both the talent and the early scout get rewarded as the video goes viral.
+              Every buy and sell on the bonding curve routes a <b>1% royalty fee</b> directly to the <b>Coin Launcher</b>—the person who minted and launched the coin. Spot a viral video early, launch the coin, and earn <b>100% of the 1% trading royalties</b> on all volume!
             </p>
           </div>
 

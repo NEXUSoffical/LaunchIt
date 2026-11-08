@@ -275,22 +275,8 @@ export async function executeTradeOnChain(params: {
 
   if (params.mode === "buy") {
     const totalLamports = Math.floor(params.solAmount * LAMPORTS_PER_SOL);
-    const creatorFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% Creator Royalty
-    const launcherFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% Launcher Royalty
-    const curveReserveLamports = Math.max(0, totalLamports - creatorFeeLamports - launcherFeeLamports);
-
-    if (params.creatorWallet && creatorFeeLamports > 0) {
-      try {
-        const creatorPubkey = new PublicKey(params.creatorWallet);
-        tx.add(
-          SystemProgram.transfer({
-            fromPubkey: payerPubkey,
-            toPubkey: creatorPubkey,
-            lamports: creatorFeeLamports,
-          })
-        );
-      } catch (_) {}
-    }
+    const launcherFeeLamports = Math.floor(totalLamports * 0.01); // 1% Coin Launcher Royalty (100% to Launcher)
+    const curveReserveLamports = Math.max(0, totalLamports - launcherFeeLamports);
 
     if (params.launcherWallet && launcherFeeLamports > 0) {
       try {
@@ -299,7 +285,7 @@ export async function executeTradeOnChain(params: {
           SystemProgram.transfer({
             fromPubkey: payerPubkey,
             toPubkey: launcherPubkey,
-            lamports: creatorFeeLamports,
+            lamports: launcherFeeLamports,
           })
         );
       } catch (_) {}

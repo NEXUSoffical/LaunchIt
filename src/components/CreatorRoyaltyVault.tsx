@@ -25,85 +25,40 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const { publicKey, network, executeTradeAssets, notifyTx } = useWallet();
   const { currentUser } = useAuth();
 
-  const [claimType, setClaimType] = useState<"creator" | "launcher" | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [payoutAddress, setPayoutAddress] = useState(publicKey || currentUser?.solanaWallet || "");
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimSuccessTx, setClaimSuccessTx] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const split = token.feeSplit || "split_50_50";
-  const creatorSol = token.unclaimedCreatorFeesSol || 0;
-  const launcherSol = token.unclaimedLauncherFeesSol || 0;
-
-  const getResolvedCreatorHandle = (): string => {
-    if (
-      token.creatorHandle &&
-      token.creatorHandle !== "@creator" &&
-      token.creatorHandle !== "@tiktok_creator"
-    ) {
-      return token.creatorHandle;
-    }
-    const videoUrl = token.videoUrl || token.socials?.website || "";
-    if (videoUrl) {
-      const match = videoUrl.match(/@([^/?#]+)/);
-      if (match) return `@${match[1]}`;
-    }
-    if (
-      token.creator &&
-      token.creator.startsWith("@") &&
-      token.creator !== "@creator" &&
-      token.creator !== "@tiktok_creator"
-    ) {
-      return token.creator;
-    }
-    return "";
-  };
-
-  const creatorHandle = getResolvedCreatorHandle();
+  // 100% of the 1% royalty goes to the Coin Launcher
+  const launcherSol = (token.unclaimedLauncherFeesSol || 0) + (token.unclaimedCreatorFeesSol || 0);
   const connectedWallet = publicKey || currentUser?.solanaWallet || "";
   const connectedHandle = currentUser?.username ? `@${currentUser.username.toLowerCase()}` : "";
 
-  const isAuthorizedForRole = (role: "creator" | "launcher"): boolean => {
-    if (role === "launcher") {
-      if (token.launcherWallet && connectedWallet && token.launcherWallet === connectedWallet) {
-        return true;
-      }
-      if (
-        token.launcherHandle &&
-        connectedHandle &&
-        token.launcherHandle.toLowerCase() === connectedHandle
-      ) {
-        return true;
-      }
-      return !token.launcherWallet;
-    } else {
-      if (token.creatorWallet && connectedWallet && token.creatorWallet === connectedWallet) {
-        return true;
-      }
-      if (
-        creatorHandle &&
-        connectedHandle &&
-        creatorHandle.toLowerCase() === connectedHandle
-      ) {
-        return true;
-      }
-      if (token.launcherWallet && connectedWallet && token.launcherWallet === connectedWallet && !token.creatorWallet) {
-        return true;
-      }
-      return false;
+  const isAuthorizedLauncher = (): boolean => {
+    if (token.launcherWallet && connectedWallet && token.launcherWallet === connectedWallet) {
+      return true;
     }
+    if (
+      token.launcherHandle &&
+      connectedHandle &&
+      token.launcherHandle.toLowerCase() === connectedHandle
+    ) {
+      return true;
+    }
+    return !token.launcherWallet;
   };
 
-  const handleOpenClaimModal = (role: "creator" | "launcher") => {
-    setClaimType(role);
+  const handleOpenClaimModal = () => {
     setPayoutAddress(publicKey || currentUser?.solanaWallet || "");
     setClaimSuccessTx(null);
     setAuthError(null);
+    setIsModalOpen(true);
   };
 
   const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claimType) return;
     setAuthError(null);
 
     const targetWallet = (payoutAddress || connectedWallet).trim();
@@ -112,16 +67,14 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
       return;
     }
 
-    if (!isAuthorizedForRole(claimType)) {
+    if (!isAuthorizedLauncher()) {
       setAuthError(
-        claimType === "creator"
-          ? `Connected wallet (${connectedWallet.slice(0, 6)}...) does not match creator ${creatorHandle || token.creatorWallet || "record"}.`
-          : `Connected wallet (${connectedWallet.slice(0, 6)}...) does not match launcher ${token.launcherWallet?.slice(0, 6) || token.launcherHandle || "record"}.`
+        `Connected wallet (${connectedWallet.slice(0, 6)}...) does not match the Coin Launcher (${
+          token.launcherWallet?.slice(0, 6) || token.launcherHandle || "record"
+        }).`
       );
       return;
     }
-
-    const claimSol = claimType === "creator" ? creatorSol : launcherSol;
 
     setIsClaiming(true);
     try {
@@ -129,39 +82,33 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         network,
         mintAddress: token.mint,
         symbol: token.symbol,
-        role: claimType,
-        claimSolAmount: claimSol,
+        role: "launcher",
+        claimSolAmount: launcherSol,
         payoutWallet: targetWallet,
       });
 
-      if (claimSol > 0) {
+      if (launcherSol > 0) {
         executeTradeAssets({
-          solDelta: claimSol,
+          solDelta: launcherSol,
           mint: token.mint,
           tokenDelta: 0,
         });
       }
 
-      const updatedToken: Token =
-        claimType === "creator"
-          ? {
-              ...token,
-              creatorWallet: targetWallet,
-              unclaimedCreatorFeesSol: 0,
-              claimedCreatorFeesSol: (token.claimedCreatorFeesSol || 0) + claimSol,
-            }
-          : {
-              ...token,
-              launcherWallet: targetWallet,
-              unclaimedLauncherFeesSol: 0,
-              claimedLauncherFeesSol: (token.claimedLauncherFeesSol || 0) + claimSol,
-            };
+      const updatedToken: Token = {
+        ...token,
+        feeSplit: "launcher_100",
+        launcherWallet: targetWallet,
+        unclaimedLauncherFeesSol: 0,
+        unclaimedCreatorFeesSol: 0,
+        claimedLauncherFeesSol: (token.claimedLauncherFeesSol || 0) + launcherSol,
+      };
 
       onUpdateToken(updatedToken);
       setClaimSuccessTx(txSignature);
       notifyTx(
         txSignature,
-        `CLAIMED ${claimSol.toFixed(4)} SOL ${claimType.toUpperCase()} ROYALTIES ($${token.symbol})`
+        `CLAIMED ${launcherSol.toFixed(4)} SOL LAUNCHER ROYALTIES ($${token.symbol})`
       );
     } catch (err: any) {
       setAuthError(err?.message || "Wallet signature cancelled or failed.");
@@ -195,7 +142,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Coins size={18} color="#ff8c37" />
           <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "#fff" }}>
-            1% Creator Royalty Vaults
+            1% Coin Launcher Royalty Vault
           </span>
         </div>
 
@@ -204,122 +151,74 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
             fontSize: "0.72rem",
             padding: "4px 10px",
             borderRadius: "999px",
-            background: "rgba(153, 69, 255, 0.15)",
-            color: "#c084fc",
-            border: "1px solid rgba(153, 69, 255, 0.35)",
+            background: "rgba(255, 96, 0, 0.16)",
+            color: "#ff8c37",
+            border: "1px solid rgba(255, 96, 0, 0.4)",
             fontWeight: 700,
           }}
         >
-          ⚡{" "}
-          {split === "creator_100"
-            ? "100% Video Creator"
-            : split === "launcher_100"
-            ? "100% Coin Launcher"
-            : "50 / 50 Split (Creator & Launcher)"}
+          ⚡ 100% of 1% Trading Fees Go to Coin Launcher
         </span>
       </div>
 
-      {/* Vaults Grid */}
+      {/* Single Launcher Royalty Vault */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          padding: "12px 16px",
+          borderRadius: "var(--radius-sm)",
+          background: "rgba(10, 11, 16, 0.65)",
+          border: "1px solid var(--border-subtle)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
           gap: "12px",
         }}
       >
-        {/* Creator Vault */}
-        <div
-          style={{
-            padding: "12px 14px",
-            borderRadius: "var(--radius-sm)",
-            background: "rgba(10, 11, 16, 0.65)",
-            border: "1px solid var(--border-subtle)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Video Owner:{" "}
-              <b style={{ color: "var(--solana-cyan)" }}>
-                {creatorHandle || (token.creatorWallet ? `${token.creatorWallet.slice(0, 4)}...${token.creatorWallet.slice(-4)}` : "Unclaimed")}
-              </b>
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
-              <span
-                className="mono"
-                style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--solana-green)" }}
-              >
-                {creatorSol.toFixed(4)} SOL
-              </span>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                (${(creatorSol * 150).toFixed(2)})
-              </span>
-            </div>
+        <div>
+          <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
+            Coin Launcher:{" "}
+            <b style={{ color: "#ff8c37" }}>
+              {token.launcherHandle
+                ? `${token.launcherHandle}${
+                    token.launcherWallet
+                      ? ` (${token.launcherWallet.slice(0, 4)}...${token.launcherWallet.slice(-4)})`
+                      : ""
+                  }`
+                : token.launcherWallet
+                ? `${token.launcherWallet.slice(0, 4)}...${token.launcherWallet.slice(-4)}`
+                : "Unlinked"}
+            </b>
           </div>
-
-          <button
-            type="button"
-            onClick={() => handleOpenClaimModal("creator")}
-            className={creatorSol > 0 ? "btn-primary" : "btn-secondary"}
-            style={{ padding: "8px 12px", fontSize: "0.75rem" }}
-          >
-            {token.creatorWallet && creatorSol === 0 ? "Wallet Linked" : "Claim as Creator"}
-          </button>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
+            <span
+              className="mono"
+              style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--solana-green)" }}
+            >
+              {launcherSol.toFixed(4)} SOL
+            </span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              (${(launcherSol * 150).toFixed(2)} unclaimed royalties)
+            </span>
+          </div>
         </div>
 
-        {/* Launcher Vault */}
-        <div
-          style={{
-            padding: "12px 14px",
-            borderRadius: "var(--radius-sm)",
-            background: "rgba(10, 11, 16, 0.65)",
-            border: "1px solid var(--border-subtle)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
+        <button
+          type="button"
+          onClick={handleOpenClaimModal}
+          className="btn-primary"
+          style={{ padding: "8px 16px", fontSize: "0.78rem" }}
         >
-          <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Coin Launcher:{" "}
-              <b style={{ color: "#ff8c37" }}>
-                {token.launcherWallet
-                  ? `${token.launcherWallet.slice(0, 4)}...${token.launcherWallet.slice(-4)}`
-                  : token.launcherHandle || "Unlinked"}
-              </b>
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
-              <span
-                className="mono"
-                style={{ fontSize: "1.1rem", fontWeight: 800, color: "#ff8c37" }}
-              >
-                {launcherSol.toFixed(4)} SOL
-              </span>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                (${(launcherSol * 150).toFixed(2)})
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleOpenClaimModal("launcher")}
-            className="btn-primary"
-            style={{ padding: "8px 12px", fontSize: "0.75rem" }}
-          >
-            {launcherSol > 0
-              ? "Claim Fees"
-              : token.launcherWallet
-              ? "Payout Linked"
-              : "Link Wallet"}
-          </button>
-        </div>
+          {launcherSol > 0
+            ? `Claim ${launcherSol.toFixed(4)} SOL`
+            : token.launcherWallet
+            ? "Payout Wallet Linked"
+            : "Link Payout Wallet"}
+        </button>
       </div>
 
       {/* On-Chain Wallet Claim Modal */}
-      {claimType && (
+      {isModalOpen && (
         <div
           style={{
             position: "fixed",
@@ -353,14 +252,12 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <ShieldCheck size={20} color="var(--solana-green)" />
                 <h3 style={{ fontSize: "1.1rem", fontWeight: 800 }}>
-                  {claimType === "creator"
-                    ? "Claim Video Creator Royalties"
-                    : "Claim Coin Launcher Royalties"}
+                  Claim Coin Launcher Royalties
                 </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setClaimType(null)}
+                onClick={() => setIsModalOpen(false)}
                 style={{ background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}
               >
                 <X size={18} />
@@ -380,7 +277,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
               >
                 <CheckCircle2 size={42} color="var(--solana-green)" />
                 <div style={{ fontSize: "1rem", fontWeight: 800, color: "#ffffff" }}>
-                  Royalties Claimed & Linked On-Chain!
+                  Launcher Royalties Claimed On-Chain!
                 </div>
                 <a
                   href={`https://solscan.io/tx/${encodeURIComponent(claimSuccessTx)}${
@@ -396,7 +293,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                 </a>
                 <button
                   type="button"
-                  onClick={() => setClaimType(null)}
+                  onClick={() => setIsModalOpen(false)}
                   className="btn-primary"
                   style={{ width: "100%", marginTop: "6px" }}
                 >
@@ -415,10 +312,10 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                   }}
                 >
                   <div style={{ color: "var(--text-muted)", marginBottom: "4px" }}>
-                    Unclaimed {claimType === "creator" ? "Creator" : "Launcher"} Vault Balance:
+                    Unclaimed Coin Launcher Royalty Balance (1% of all trades):
                   </div>
                   <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--solana-green)" }}>
-                    {(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL
+                    {launcherSol.toFixed(4)} SOL
                   </div>
                 </div>
 
@@ -489,8 +386,8 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
                   <span>
                     {isClaiming
                       ? "Waiting for Wallet Signature..."
-                      : (claimType === "creator" ? creatorSol : launcherSol) > 0
-                      ? `Sign & Claim ${(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL`
+                      : launcherSol > 0
+                      ? `Sign & Claim ${launcherSol.toFixed(4)} SOL`
                       : "Sign & Verify Payout Wallet"}
                   </span>
                 </button>

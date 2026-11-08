@@ -126,15 +126,7 @@ const SlideTradePanel: React.FC<{
       const solTraded = isBuy ? tradeAmount : activeSellQuote.solOut || 0;
       const tokensTraded = isBuy ? Math.round(activeBuyQuote.tokensOut || 0) : tradeAmount;
       const feeSol = solTraded * 0.01;
-      const splitMode = token.feeSplit || "split_50_50";
-      let creatorDelta = 0;
-      let launcherDelta = 0;
-      if (splitMode === "creator_100") creatorDelta = feeSol;
-      else if (splitMode === "launcher_100") launcherDelta = feeSol;
-      else {
-        creatorDelta = feeSol * 0.5;
-        launcherDelta = feeSol * 0.5;
-      }
+      const launcherDelta = feeSol;
 
       const { txSignature } = await executeTradeOnChain({
         network,
@@ -178,7 +170,7 @@ const SlideTradePanel: React.FC<{
         progressPercent: newProgress,
         volume24hSol: token.volume24hSol + solTraded,
         isGraduated: token.isGraduated || newProgress >= 100,
-        unclaimedCreatorFeesSol: (token.unclaimedCreatorFeesSol || 0) + creatorDelta,
+        feeSplit: "launcher_100",
         unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherDelta,
       };
 
@@ -652,13 +644,9 @@ const SlideTradePanel: React.FC<{
             </b>
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ color: "var(--solana-amber)" }}>
-              <Crown size={11} style={{ display: "inline", marginRight: "3px" }} />
-              0.5% Creator
-            </span>
-            <span style={{ color: "#ff8c37" }}>
+            <span style={{ color: "#ff8c37", fontWeight: 700 }}>
               <Rocket size={11} style={{ display: "inline", marginRight: "3px" }} />
-              0.5% Launcher
+              1% Coin Launcher Royalty
             </span>
           </span>
         </div>
