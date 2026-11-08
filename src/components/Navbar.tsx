@@ -2,24 +2,26 @@ import React, { useState } from "react";
 import { useWallet } from "../context/WalletContext";
 import { useAuth } from "../context/AuthContext";
 import {
-  Rocket,
-  Wallet,
   Sparkles,
   BookOpen,
-  Layers,
   LogOut,
   User,
   Copy,
   Check,
   ChevronDown,
-  Shield,
   Zap,
+  Activity,
+  ExternalLink,
+  CheckCircle2,
+  X,
 } from "lucide-react";
 
 interface NavbarProps {
   onOpenCreate: () => void;
   onOpenGuide: () => void;
   onHomeClick: () => void;
+  onOpenExplorer?: (query?: string) => void;
+  isExplorerActive?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -27,9 +29,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenGuide,
   onHomeClick,
 }) => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateProfile } = useAuth();
   const {
-    connected,
     publicKey,
     balance,
     network,
@@ -37,10 +38,17 @@ export const Navbar: React.FC<NavbarProps> = ({
     connect,
     requestAirdrop,
     isAirdropping,
+    airdropSuccess,
+    currentSlot,
+    isNodeOnline,
+    txHistory,
   } = useWallet();
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [showExplorer, setShowExplorer] = useState(false);
   const [copiedAddr, setCopiedAddr] = useState(false);
+  const [isEditingHandle, setIsEditingHandle] = useState(false);
+  const [handleInput, setHandleInput] = useState("");
 
   const shortAddr = publicKey
     ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
@@ -85,8 +93,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             src="/logo.jpg"
             alt="LaunchIt Logo"
             style={{
-              width: "46px",
-              height: "46px",
+              width: "44px",
+              height: "44px",
               borderRadius: "12px",
               objectFit: "cover",
               border: "1.5px solid rgba(255, 96, 0, 0.5)",
@@ -105,15 +113,40 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Center / Stats info */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        {/* Center / Nav Items */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <a
+            href={
+              network === "mainnet-beta"
+                ? "https://solscan.io"
+                : "https://solscan.io/?cluster=devnet"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary"
+            style={{
+              fontSize: "0.85rem",
+              padding: "8px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              textDecoration: "none",
+              color: "#cbd5e1",
+            }}
+            title="Open Solscan Block Explorer in a new tab"
+          >
+            <Activity size={15} color="var(--solana-green)" />
+            <span>Solscan</span>
+            <ExternalLink size={12} color="var(--text-muted)" />
+          </a>
+
           <button
             onClick={onOpenGuide}
             className="btn-secondary"
             style={{ fontSize: "0.85rem", padding: "8px 14px" }}
           >
             <BookOpen size={16} color="var(--solana-cyan)" />
-            <span>$0 Setup Guide</span>
+            <span>How It Works</span>
           </button>
 
           <button
@@ -156,7 +189,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setNetwork("mainnet-beta")}
               style={{
                 background: network === "mainnet-beta" ? "var(--bg-surface-elevated)" : "transparent",
-                color: network === "mainnet-beta" ? "var(--solana-purple)" : "var(--text-muted)",
+                color: network === "mainnet-beta" ? "#ff8c37" : "var(--text-muted)",
                 padding: "4px 8px",
                 borderRadius: "4px",
                 fontWeight: 600,
@@ -165,20 +198,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               Mainnet
             </button>
           </div>
-
-          {/* Devnet Free Airdrop Button */}
-          {network === "devnet" && (
-            <button
-              onClick={requestAirdrop}
-              disabled={isAirdropping}
-              className="btn-secondary"
-              title="Request 1 Free SOL on Devnet"
-              style={{ fontSize: "0.8rem", padding: "8px 12px", border: "1px solid rgba(20, 241, 149, 0.3)" }}
-            >
-              <Layers size={14} color="var(--solana-green)" />
-              <span>{isAirdropping ? "..." : "+1 SOL"}</span>
-            </button>
-          )}
 
           {/* Official Account Pill */}
           {currentUser ? (
@@ -190,10 +209,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   alignItems: "center",
                   gap: "10px",
                   background: "var(--bg-surface-elevated)",
-                  border: "1px solid rgba(255, 96, 0, 0.4)",
+                  border: airdropSuccess ? "1.5px solid #10b981" : "1px solid rgba(255, 96, 0, 0.4)",
                   borderRadius: "var(--radius-md)",
                   padding: "6px 12px",
                   cursor: "pointer",
+                  boxShadow: airdropSuccess ? "0 0 20px rgba(16, 185, 129, 0.4)" : "none",
+                  transition: "all 0.3s ease",
                 }}
               >
                 <img
@@ -205,8 +226,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "4px" }}>
                     <span style={{ color: "#ff8c37" }}>@</span>{currentUser.username}
                   </div>
-                  <div className="mono" style={{ fontSize: "0.72rem", color: "var(--solana-green)", fontWeight: 700 }}>
-                    {balance.toFixed(2)} SOL
+                  <div className="mono" style={{ fontSize: "0.74rem", color: "var(--solana-green)", fontWeight: 800 }}>
+                    {balance.toFixed(4)} SOL
                   </div>
                 </div>
                 <ChevronDown size={14} color="var(--text-muted)" />
@@ -242,12 +263,61 @@ export const Navbar: React.FC<NavbarProps> = ({
                         alt={currentUser.username}
                         style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#111420" }}
                       />
-                      <div style={{ overflow: "hidden" }}>
-                        <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#fff" }}>
-                          @{currentUser.username}
-                        </div>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                          {currentUser.email}
+                      <div style={{ overflow: "hidden", flex: 1 }}>
+                        {isEditingHandle ? (
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <input
+                              type="text"
+                              value={handleInput}
+                              onChange={(e) => setHandleInput(e.target.value)}
+                              placeholder="handle"
+                              style={{
+                                width: "100%",
+                                background: "var(--bg-surface)",
+                                border: "1px solid var(--border-subtle)",
+                                borderRadius: "6px",
+                                padding: "4px 8px",
+                                color: "#fff",
+                                fontSize: "0.82rem",
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                const clean = handleInput.trim().replace(/^@/, "").replace(/[^a-zA-Z0-9_]/g, "");
+                                if (clean) updateProfile({ username: clean, displayName: clean });
+                                setIsEditingHandle(false);
+                              }}
+                              className="btn-primary"
+                              style={{ padding: "4px 8px", fontSize: "0.72rem" }}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#fff" }}>
+                              @{currentUser.username}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setHandleInput(currentUser.username);
+                                setIsEditingHandle(true);
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                color: "#ff8c37",
+                                fontSize: "0.72rem",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Edit @handle
+                            </button>
+                          </div>
+                        )}
+                        <div className="mono" style={{ fontSize: "0.75rem", color: "var(--solana-green)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", marginTop: "2px" }}>
+                          Wallet: {shortAddr}
                         </div>
                       </div>
                     </div>
@@ -255,9 +325,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {/* Stats */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", background: "rgba(255, 255, 255, 0.03)", padding: "10px", borderRadius: "8px" }}>
                       <div>
-                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block" }}>Devnet Balance</span>
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block" }}>Solana Balance</span>
                         <span className="mono" style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--solana-green)" }}>
-                          {balance.toFixed(2)} SOL
+                          {balance.toFixed(4)} SOL
                         </span>
                       </div>
                       <div>
@@ -296,13 +366,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                     <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
                       <button
-                        onClick={requestAirdrop}
-                        disabled={isAirdropping}
+                        onClick={connect}
                         className="btn-secondary"
                         style={{ fontSize: "0.8rem", padding: "8px 12px", justifyContent: "center" }}
                       >
-                        <Layers size={14} color="var(--solana-green)" />
-                        <span>{isAirdropping ? "Airdropping..." : "Airdrop +1 Devnet SOL"}</span>
+                        <span>Switch Solana Wallet</span>
                       </button>
 
                       <button
@@ -326,7 +394,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         }}
                       >
                         <LogOut size={14} />
-                        <span>Sign Out of LaunchIt</span>
+                        <span>Disconnect Wallet</span>
                       </button>
                     </div>
                   </div>
@@ -334,17 +402,150 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           ) : (
-            <button
-              onClick={connect}
-              className="btn-secondary"
-              style={{ borderColor: "var(--solana-green)" }}
-            >
-              <Wallet size={16} color="var(--solana-green)" />
-              <span>Connect Wallet</span>
-            </button>
+            /* Guest / In-App Solana Wallet Pill */
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                onClick={handleCopyAddr}
+                title="Click to copy your Solana Address"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  background: "var(--bg-surface-elevated)",
+                  border: airdropSuccess
+                    ? "1.5px solid #10b981"
+                    : "1px solid rgba(255, 96, 0, 0.4)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: airdropSuccess ? "0 0 20px rgba(16, 185, 129, 0.5)" : "none",
+                }}
+              >
+                <div
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #14f195 0%, #9945ff 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.85rem",
+                    boxShadow: "0 0 10px rgba(20, 241, 149, 0.4)",
+                  }}
+                >
+                  ◎
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: "0.73rem", fontWeight: 700, color: "#94a3b8", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span>{shortAddr || "Not Connected"}</span>
+                    {copiedAddr ? <Check size={12} color="#10b981" /> : <Copy size={11} color="#64748b" />}
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: "0.82rem",
+                      color: airdropSuccess ? "#10b981" : "var(--solana-green)",
+                      fontWeight: 800,
+                      transition: "color 0.3s ease",
+                    }}
+                  >
+                    {balance.toFixed(2)} SOL
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={connect}
+                className="btn-secondary"
+                style={{ padding: "6px 10px", fontSize: "0.76rem", borderColor: "rgba(255, 255, 255, 0.18)" }}
+              >
+                <User size={13} color="#cbd5e1" />
+                <span>Connect Wallet</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Solana Live Telemetry Modal */}
+      {showExplorer && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999,
+            padding: "20px",
+          }}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              width: "100%",
+              maxWidth: "680px",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              padding: "24px",
+              border: "1.5px solid rgba(20, 241, 149, 0.4)",
+              boxShadow: "0 0 40px rgba(20, 241, 149, 0.25), 0 20px 50px rgba(0,0,0,0.9)",
+              borderRadius: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255, 255, 255, 0.1)", paddingBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: isNodeOnline ? "#14f195" : "#ef4444", boxShadow: isNodeOnline ? "0 0 12px #14f195" : "none" }} />
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                  SOLANA NETWORK ACTIVITY
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowExplorer(false)}
+                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "260px", overflowY: "auto" }}>
+              {txHistory.map((tx, idx) => (
+                <div
+                  key={`${tx.signature}-${idx}`}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "8px",
+                    padding: "10px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>
+                        {tx.message}
+                      </span>
+                    </div>
+                    <span className="mono" style={{ fontSize: "0.7rem", color: "var(--solana-green)", fontWeight: 700 }}>
+                      Slot #{tx.slot}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

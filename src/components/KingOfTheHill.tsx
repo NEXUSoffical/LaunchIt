@@ -1,6 +1,6 @@
 import React from "react";
 import { Token } from "../types";
-import { Crown, Flame, ArrowUpRight, ShieldCheck } from "lucide-react";
+import { Crown, Flame, ArrowUpRight } from "lucide-react";
 
 interface KingOfTheHillProps {
   token: Token;
@@ -132,15 +132,24 @@ export const KingOfTheHill: React.FC<KingOfTheHillProps> = ({
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-            <span>Market Cap: <b style={{ color: "var(--text-primary)" }}>{token.marketCapSol.toFixed(1)} SOL</b></span>
-            <span>Target: <b>85 SOL</b></span>
+            <span>
+              Market Cap: <b style={{ color: "var(--text-primary)" }}>{(token.marketCapSol || 30).toFixed(1)} SOL (${token.marketCapUsd.toLocaleString()})</b>
+            </span>
+            <span>
+              Target: <b>85.0 SOL</b>
+            </span>
           </div>
 
           <button
             className="btn-primary"
-            style={{ marginTop: "4px", width: "100%", background: "linear-gradient(135deg, #f59e0b 0%, #14f195 100%)" }}
+            style={{
+              marginTop: "4px",
+              width: "100%",
+              background: "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)",
+              boxShadow: "0 0 18px rgba(255, 96, 0, 0.4)",
+            }}
           >
-            <span>Trade on Curve</span>
+            <span>Trade on Bonding Curve 🚀</span>
             <ArrowUpRight size={18} />
           </button>
         </div>

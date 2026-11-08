@@ -12,12 +12,12 @@ import {
 } from "@solana/spl-token";
 
 export const PROGRAM_ID = new PublicKey(
-  "Launch1111111111111111111111111111111111111"
+  "OrbitLaunch11111111111111111111111111111111"
 );
 
-export const CONFIG_SEED = Buffer.from("launchpad_config");
-export const BONDING_CURVE_SEED = Buffer.from("bonding_curve");
-export const CURVE_VAULT_SEED = Buffer.from("curve_vault");
+export const CONFIG_SEED = Buffer.from("orbit_launch_config");
+export const BONDING_CURVE_SEED = Buffer.from("orbit_bonding_curve");
+export const CURVE_VAULT_SEED = Buffer.from("orbit_curve_vault");
 
 export function getLaunchpadConfigPDA(programId: PublicKey = PROGRAM_ID): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([CONFIG_SEED], programId);
@@ -66,3 +66,4 @@ export function createEnsureAtaInstruction(
     tokenProgramId
   );
 }
+

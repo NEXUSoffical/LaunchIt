@@ -7,22 +7,54 @@ console.log("🐆 LaunchIt TikTok Extension active!");
 
 let loginCompletedDispatched = false;
 
-// Monitor login popup window once login completes
-if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.innerWidth <= 650) {
+// Detect if this window was opened for LaunchIt authentication
+const isAuthTab =
+  window.location.hash.includes("launchit_auth") ||
+  window.location.search.includes("launchit_auth") ||
+  window.location.hash.includes("creator=") ||
+  window.name === "TikTokLogin" ||
+  window.name === "TikTokAuth";
+
+if (isAuthTab) {
+  // 1. Immediately kill all video/audio playback and hide video feeds
+  const antiVideoStyle = document.createElement("style");
+  antiVideoStyle.textContent = `
+    video { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+    [class*="DivVideoFeed"], [class*="FeedContainer"], [class*="DivContentContainer"] { opacity: 0.1 !important; pointer-events: none !important; }
+    body { background: #0b0e14 !important; }
+  `;
+  (document.head || document.documentElement).appendChild(antiVideoStyle);
+
+  const killVideos = () => {
+    document.querySelectorAll("video").forEach((v) => {
+      try {
+        v.pause();
+        v.muted = true;
+        v.volume = 0;
+      } catch (_) {}
+    });
+  };
+
+  document.addEventListener(
+    "play",
+    (e) => {
+      if (e.target && e.target.tagName === "VIDEO") {
+        e.target.pause();
+        e.target.muted = true;
+      }
+    },
+    true
+  );
+
+  killVideos();
+  setInterval(killVideos, 250);
+
   let expectedCreator = "";
   try {
     const hash = window.location.hash || "";
     if (hash.includes("creator=")) {
       expectedCreator = hash.split("creator=")[1]?.split("&")[0]?.replace("@", "")?.trim()?.toLowerCase() || "";
     }
-  } catch (_) {}
-
-  try {
-    chrome.storage.local.get(["expectedCreatorHandle"], (res) => {
-      if (res?.expectedCreatorHandle) {
-        expectedCreator = res.expectedCreatorHandle.replace("@", "").trim().toLowerCase();
-      }
-    });
   } catch (_) {}
 
   const getUsernameFromPage = async () => {
@@ -34,11 +66,11 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.inne
       }
     }
 
-    // 2. Same-origin fetch inside TikTok (always has session cookies and bypasses overlays)
+    // 2. Same-origin fetch inside TikTok
     try {
       const res = await fetch("/passport/web/account/info/", {
         credentials: "include",
-        headers: { "Accept": "application/json" }
+        headers: { Accept: "application/json" }
       });
       if (res.ok) {
         const data = await res.json();
@@ -55,84 +87,41 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.inne
       if (el) {
         const data = JSON.parse(el.textContent || "{}");
         const defaultScope = data?.["__DEFAULT_SCOPE__"] || {};
-        const pUser = defaultScope?.["webapp.user-detail"]?.userInfo?.user?.uniqueId ||
-                     defaultScope?.["webapp.app-context"]?.user?.uniqueId;
+        const pUser =
+          defaultScope?.["webapp.user-detail"]?.userInfo?.user?.uniqueId ||
+          defaultScope?.["webapp.app-context"]?.user?.uniqueId;
         if (pUser && typeof pUser === "string" && !["foryou", "live", "explore"].includes(pUser.toLowerCase())) {
           return pUser.toLowerCase().trim();
         }
       }
     } catch (_) {}
 
-    // 4. DOM selectors
-    const selectors = [
-      'a[data-e2e="profile-icon"]',
-      'a[data-e2e="nav-profile"]',
-      'a[data-e2e="user-avatar"]',
-      '[data-e2e="user-avatar"] a',
-      'header a[href*="/@"]',
-      'nav a[href*="/@"]',
-      'aside a[href*="/@"]'
-    ];
-    for (const s of selectors) {
-      const el = document.querySelector(s);
-      const href = el?.getAttribute("href") || "";
-      if (href.includes("/@")) {
-        const u = href.split("/@")[1]?.split("/")[0]?.split("?")[0]?.trim();
-        if (u && !["foryou", "live", "explore", "following", "friends"].includes(u.toLowerCase())) {
-          return u;
-        }
-      }
-    }
     return "";
   };
 
   const checkLoginRedirect = async () => {
     if (loginCompletedDispatched) return;
-    const path = window.location.pathname;
+    const path = window.location.pathname.toLowerCase();
 
-    // While explicitly on /login or /signup or /logout input screens, wait for user input
-    if (path.includes("/login") || path.includes("/signup") || path.includes("/logout")) {
+    // While user is actively filling in /login or /signup, let them proceed
+    if (path.includes("/login") || path.includes("/signup")) {
       return;
     }
 
-    if (!expectedCreator) {
-      try {
-        const res = await chrome.storage.local.get(["expectedCreatorHandle"]);
-        if (res?.expectedCreatorHandle) {
-          expectedCreator = res.expectedCreatorHandle.replace("@", "").trim().toLowerCase();
-        }
-      } catch (_) {}
-    }
+    // Navigated away from login form (e.g. redirected to /foryou or profile) -> LOGIN COMPLETE!
+    loginCompletedDispatched = true;
+    killVideos();
 
-    // When on feed, home, or profile after redirect:
-    const u = await getUsernameFromPage();
-    if (u) {
-      const cleanUser = u.toLowerCase().trim();
+    // Immediately signal background to close the window from the service worker
+    try {
+      chrome.runtime.sendMessage({ type: "TIKTOK_AUTH_NAVIGATED" });
+    } catch (_) {}
 
-      // If signed into wrong account, DO NOT auto-submit! Log out of wrong account immediately!
-      if (expectedCreator && cleanUser !== expectedCreator) {
-        console.warn(`LaunchIt: Detected @${cleanUser}, expected @${expectedCreator}. Wiping wrong session...`);
-        try {
-          chrome.runtime.sendMessage({
-            type: "TIKTOK_WRONG_ACCOUNT",
-            detected: cleanUser,
-            expected: expectedCreator
-          });
-        } catch (_) {}
-
-        // Navigate popup directly to logout to kill wrong session and show clean login form
-        window.location.href = `https://www.tiktok.com/logout#creator=${expectedCreator}`;
-        return;
-      }
-
-      // Verified genuine match with expected creator!
-      loginCompletedDispatched = true;
+    const cleanUser = await getUsernameFromPage();
+    if (cleanUser) {
       try {
         chrome.runtime.sendMessage({ type: "TIKTOK_LOGIN_COMPLETED", username: cleanUser });
       } catch (_) {}
-      setTimeout(() => {
-        try { window.close(); } catch (_) {}
-      }, 500);
     }
   };
 
@@ -142,7 +131,7 @@ if (window.name === "TikTokLogin" || window.name === "TikTokAuth" || window.inne
       return;
     }
     checkLoginRedirect();
-  }, 800);
+  }, 250);
 }
 
 
@@ -323,11 +312,38 @@ function openInAppLaunchModal() {
 
   const deployBtn = document.getElementById("launchit-deploy-btn");
   if (deployBtn) {
-    deployBtn.addEventListener("click", () => {
+    deployBtn.addEventListener("click", async () => {
       const statusArea = document.getElementById("launchit-status-area");
       const currentName = nameInput ? nameInput.value : data.title;
       const currentTicker = tickerInput ? tickerInput.value.replace("$", "") : data.ticker;
       const launcherWallet = (overlay.querySelector("#launchit-launcher-wallet-input")?.value || "").trim();
+
+      // Record WHO launched this coin: read the real signed-in TikTok account from TikTok's own session API.
+      let launcherHandle = "";
+      try {
+        const res = await fetch("/passport/web/account/info/", {
+          credentials: "include",
+          headers: { Accept: "application/json" }
+        });
+        if (res.ok) {
+          const info = await res.json();
+          const u = info?.data?.username || info?.data?.unique_id;
+          if (u && typeof u === "string" && !u.includes("session")) {
+            launcherHandle = u.trim().toLowerCase();
+          }
+        }
+      } catch (_) {}
+
+      if (!launcherHandle) {
+        if (statusArea) {
+          statusArea.style.display = "block";
+          statusArea.style.background = "rgba(239, 68, 68, 0.15)";
+          statusArea.style.borderColor = "#ef4444";
+          statusArea.style.color = "#fca5a5";
+          statusArea.innerHTML = "⛔ Sign into your TikTok account first. Your TikTok account is how you prove you launched this coin when claiming royalties.";
+        }
+        return;
+      }
 
       deployBtn.textContent = "Deploying on Solana...";
       deployBtn.disabled = true;
@@ -340,6 +356,7 @@ function openInAppLaunchModal() {
           "&video=" + encodeURIComponent(data.url) + 
           "&creator=" + encodeURIComponent(data.creator) + 
           "&fee_split=" + encodeURIComponent(selectedSplit) + 
+          "&launcher_handle=" + encodeURIComponent("@" + launcherHandle) +
           (launcherWallet ? "&launcher_wallet=" + encodeURIComponent(launcherWallet) : "");
 
         deployBtn.style.display = "none";

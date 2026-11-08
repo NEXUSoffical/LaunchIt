@@ -1,131 +1,146 @@
 /**
- * Pure TypeScript implementation of the Constant Product Bonding Curve math.
+ * Pure TypeScript implementation of the Constant Product Bonding Curve math for Orbit Chain.
  * Uses 128-bit BigInt precision to match on-chain Rust calculations exactly.
  */
 
 export interface BuyQuote {
   tokensOut: bigint;
   feeLamports: bigint;
-  netSolLamports: bigint;
-  pricePerTokenSol: number;
+  feeBurnedLamports: bigint;
+  feeTreasuryLamports: bigint;
+  netOrbitLamports: bigint;
+  pricePerTokenOrbit: number;
   priceImpactPercent: number;
 }
 
 export interface SellQuote {
-  solGrossLamports: bigint;
+  orbitGrossLamports: bigint;
   feeLamports: bigint;
-  netSolLamports: bigint;
-  pricePerTokenSol: number;
+  feeBurnedLamports: bigint;
+  feeTreasuryLamports: bigint;
+  netOrbitLamports: bigint;
+  pricePerTokenOrbit: number;
   priceImpactPercent: number;
 }
 
 export class CurveCalculator {
   /**
-   * Calculate tokens received for a given gross SOL input.
+   * Calculate tokens received for a given gross $ORBIT input.
    */
   static getBuyQuote(
-    solAmountLamports: bigint,
-    virtualSolReserves: bigint,
+    orbitAmountLamports: bigint,
+    virtualOrbitReserves: bigint,
     virtualTokenReserves: bigint,
     realTokenReserves: bigint,
-    feeBasisPoints: number = 100 // 1% default
+    feeBasisPoints: number = 100, // 1% default
+    burnSplitBasisPoints: number = 5000 // 50% burned
   ): BuyQuote {
-    if (solAmountLamports <= 0n) {
-      throw new Error("SOL amount must be greater than zero");
+    if (orbitAmountLamports <= 0n) {
+      throw new Error("$ORBIT amount must be greater than zero");
     }
 
-    const feeLamports = (solAmountLamports * BigInt(feeBasisPoints)) / 10000n;
-    const netSolLamports = solAmountLamports - feeLamports;
+    const feeLamports = (orbitAmountLamports * BigInt(feeBasisPoints)) / 10000n;
+    const feeBurnedLamports = (feeLamports * BigInt(burnSplitBasisPoints)) / 10000n;
+    const feeTreasuryLamports = feeLamports - feeBurnedLamports;
+    const netOrbitLamports = orbitAmountLamports - feeLamports;
 
-    // k = v_sol * v_token
-    const k = virtualSolReserves * virtualTokenReserves;
-    const newVirtualSol = virtualSolReserves + netSolLamports;
-    const newVirtualToken = k / newVirtualSol;
+    // k = v_orbit * v_token
+    const k = virtualOrbitReserves * virtualTokenReserves;
+    const newVirtualOrbit = virtualOrbitReserves + netOrbitLamports;
+    const newVirtualToken = k / newVirtualOrbit;
     let tokensOut = virtualTokenReserves - newVirtualToken;
 
     if (tokensOut > realTokenReserves) {
       tokensOut = realTokenReserves;
     }
 
-    // Spot prices (SOL per token in 6 decimal units)
-    const initialSpotPrice = Number(virtualSolReserves) / Number(virtualTokenReserves);
-    const executionPrice = Number(netSolLamports) / Number(tokensOut);
+    // Spot prices ($ORBIT per token in 6 decimal units)
+    const initialSpotPrice = Number(virtualOrbitReserves) / Number(virtualTokenReserves);
+    const executionPrice = Number(netOrbitLamports) / Number(tokensOut);
     const priceImpactPercent = Math.max(0, ((executionPrice - initialSpotPrice) / initialSpotPrice) * 100);
 
     return {
       tokensOut,
       feeLamports,
-      netSolLamports,
-      pricePerTokenSol: executionPrice / 1e3, // normalized
+      feeBurnedLamports,
+      feeTreasuryLamports,
+      netOrbitLamports,
+      pricePerTokenOrbit: executionPrice / 1e3, // normalized
       priceImpactPercent,
     };
   }
 
   /**
-   * Calculate SOL received when selling a given token amount.
+   * Calculate $ORBIT received when selling a given token amount.
    */
   static getSellQuote(
     tokenAmountIn: bigint,
-    virtualSolReserves: bigint,
+    virtualOrbitReserves: bigint,
     virtualTokenReserves: bigint,
-    realSolReserves: bigint,
-    feeBasisPoints: number = 100
+    realOrbitReserves: bigint,
+    feeBasisPoints: number = 100,
+    burnSplitBasisPoints: number = 5000
   ): SellQuote {
     if (tokenAmountIn <= 0n) {
       throw new Error("Token amount must be greater than zero");
     }
 
-    const k = virtualSolReserves * virtualTokenReserves;
+    const k = virtualOrbitReserves * virtualTokenReserves;
     const newVirtualToken = virtualTokenReserves + tokenAmountIn;
 
     // Ceil division for solvency: (k + newVirtualToken - 1) / newVirtualToken
-    const newVirtualSol = (k + newVirtualToken - 1n) / newVirtualToken;
-    let solGrossLamports = virtualSolReserves - newVirtualSol;
+    const newVirtualOrbit = (k + newVirtualToken - 1n) / newVirtualToken;
+    let orbitGrossLamports = virtualOrbitReserves - newVirtualOrbit;
 
-    if (solGrossLamports > realSolReserves) {
-      solGrossLamports = realSolReserves;
+    if (orbitGrossLamports > realOrbitReserves) {
+      orbitGrossLamports = realOrbitReserves;
     }
 
-    const feeLamports = (solGrossLamports * BigInt(feeBasisPoints)) / 10000n;
-    const netSolLamports = solGrossLamports - feeLamports;
+    const feeLamports = (orbitGrossLamports * BigInt(feeBasisPoints)) / 10000n;
+    const feeBurnedLamports = (feeLamports * BigInt(burnSplitBasisPoints)) / 10000n;
+    const feeTreasuryLamports = feeLamports - feeBurnedLamports;
+    const netOrbitLamports = orbitGrossLamports - feeLamports;
 
-    const initialSpotPrice = Number(virtualSolReserves) / Number(virtualTokenReserves);
-    const executionPrice = Number(solGrossLamports) / Number(tokenAmountIn);
+    const initialSpotPrice = Number(virtualOrbitReserves) / Number(virtualTokenReserves);
+    const executionPrice = Number(orbitGrossLamports) / Number(tokenAmountIn);
     const priceImpactPercent = Math.max(0, ((initialSpotPrice - executionPrice) / initialSpotPrice) * 100);
 
     return {
-      solGrossLamports,
+      orbitGrossLamports,
       feeLamports,
-      netSolLamports,
-      pricePerTokenSol: executionPrice / 1e3,
+      feeBurnedLamports,
+      feeTreasuryLamports,
+      netOrbitLamports,
+      pricePerTokenOrbit: executionPrice / 1e3,
       priceImpactPercent,
     };
   }
 
   /**
-   * Calculate Current Market Cap in SOL
+   * Calculate Current Market Cap in $ORBIT
    * (Current Spot Price * Total Supply)
    */
-  static getMarketCapSol(
-    virtualSolReserves: bigint,
+  static getMarketCapOrbit(
+    virtualOrbitReserves: bigint,
     virtualTokenReserves: bigint,
     totalSupplyTokens: bigint = 1_000_000_000n * 1_000_000n // 1B with 6 decimals
   ): number {
-    const spotPrice = Number(virtualSolReserves) / Number(virtualTokenReserves);
+    const spotPrice = Number(virtualOrbitReserves) / Number(virtualTokenReserves);
     const totalTokens = Number(totalSupplyTokens) / 1e6;
-    const spotPricePerToken = spotPrice * 1e6 / 1e9; // SOL per real token
+    const spotPricePerToken = (spotPrice * 1e6) / 1e9; // $ORBIT per real token
     return spotPricePerToken * totalTokens;
   }
 
   /**
-   * Calculate progress percentage toward DEX graduation (e.g., 85 SOL target)
+   * Calculate progress percentage toward DEX graduation / "Achieved Orbit" (e.g., 85,000 $ORBIT target)
    */
   static getGraduationProgress(
-    realSolReservesLamports: bigint,
-    migrationTargetLamports: bigint = 85n * 1_000_000_000n // 85 SOL
+    realOrbitReservesLamports: bigint,
+    migrationTargetLamports: bigint = 85_000n * 1_000_000_000n // 85,000 $ORBIT
   ): number {
     if (migrationTargetLamports <= 0n) return 100;
-    const progress = (Number(realSolReservesLamports) / Number(migrationTargetLamports)) * 100;
+    const progress = (Number(realOrbitReservesLamports) / Number(migrationTargetLamports)) * 100;
     return Math.min(100, Math.max(0, progress));
   }
 }
+

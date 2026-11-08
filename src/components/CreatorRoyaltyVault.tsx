@@ -1,6 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Token } from "../types";
-import { Coins, CheckCircle2, ShieldCheck, ArrowRight, X, ExternalLink, Sparkles, User, Zap } from "lucide-react";
+import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../context/AuthContext";
+import { claimRoyaltiesOnChain } from "../services/solanaOnChain";
+import {
+  Coins,
+  CheckCircle2,
+  ShieldCheck,
+  X,
+  ExternalLink,
+  Zap,
+  Wallet,
+} from "lucide-react";
 
 interface CreatorRoyaltyVaultProps {
   token: Token;
@@ -11,13 +22,13 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   token,
   onUpdateToken,
 }) => {
+  const { publicKey, network, executeTradeAssets, notifyTx } = useWallet();
+  const { currentUser } = useAuth();
+
   const [claimType, setClaimType] = useState<"creator" | "launcher" | null>(null);
-  const [payoutAddress, setPayoutAddress] = useState("");
+  const [payoutAddress, setPayoutAddress] = useState(publicKey || currentUser?.solanaWallet || "");
   const [isClaiming, setIsClaiming] = useState(false);
-  const [isTikTokVerified, setIsTikTokVerified] = useState(false);
-  const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
-  const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
-  const [claimSuccessMsg, setClaimSuccessMsg] = useState<string | null>(null);
+  const [claimSuccessTx, setClaimSuccessTx] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const split = token.feeSplit || "split_50_50";
@@ -25,345 +36,295 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
   const launcherSol = token.unclaimedLauncherFeesSol || 0;
 
   const getResolvedCreatorHandle = (): string => {
-    if (token.creatorHandle && token.creatorHandle !== "@creator" && token.creatorHandle !== "@tiktok_creator") {
+    if (
+      token.creatorHandle &&
+      token.creatorHandle !== "@creator" &&
+      token.creatorHandle !== "@tiktok_creator"
+    ) {
       return token.creatorHandle;
     }
-    const videoUrl = token.socials?.website || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("video") : "") || "";
+    const videoUrl = token.videoUrl || token.socials?.website || "";
     if (videoUrl) {
-      const match = decodeURIComponent(videoUrl).match(/@([^/?#]+)/);
+      const match = videoUrl.match(/@([^/?#]+)/);
       if (match) return `@${match[1]}`;
     }
-    if (token.creator && token.creator.startsWith("@") && token.creator !== "@creator" && token.creator !== "@tiktok_creator") {
+    if (
+      token.creator &&
+      token.creator.startsWith("@") &&
+      token.creator !== "@creator" &&
+      token.creator !== "@tiktok_creator"
+    ) {
       return token.creator;
     }
-    return "@phil_john_jean";
+    return "";
   };
 
   const creatorHandle = getResolvedCreatorHandle();
-  const hasLauncherWallet = Boolean(token.launcherWallet);
-  const hasCreatorWallet = Boolean(token.creatorWallet);
+  const connectedWallet = publicKey || currentUser?.solanaWallet || "";
+  const connectedHandle = currentUser?.username ? `@${currentUser.username.toLowerCase()}` : "";
 
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  const handleOpenTikTokSignIn = () => {
-    setAuthError(null);
-    setIsVerifying(true);
-
-    const cleanExpected = creatorHandle.replace("@", "").trim();
-
-    // 1. Tell extension to wipe TikTok cookies & open clean login popup so user is NEVER auto-signed into the wrong account
-    window.postMessage({ type: "LAUNCHIT_OPEN_TIKTOK_LOGIN", expectedHandle: cleanExpected }, "*");
-
-    let loginCompleted = false;
-    let fallbackPopup: any = null;
-
-    // Fallback: in case extension is reloading, attempt window.open after delay
-    const fallbackTimer = setTimeout(() => {
-      const width = 550;
-      const height = 750;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      fallbackPopup = window.open(
-        `https://www.tiktok.com/login#creator=${cleanExpected}`,
-        "TikTokLogin",
-        `width=${width},height=${height},top=${top},left=${left}`
-      );
-    }, 1200);
-
-    const onLoginResult = (e: MessageEvent) => {
-      if (e.data?.type === "LAUNCHIT_OPEN_LOGIN_RESULT" && e.data?.success) {
-        clearTimeout(fallbackTimer);
+  const isAuthorizedForRole = (role: "creator" | "launcher"): boolean => {
+    if (role === "launcher") {
+      if (token.launcherWallet && connectedWallet && token.launcherWallet === connectedWallet) {
+        return true;
       }
-    };
-    window.addEventListener("message", onLoginResult);
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === "LAUNCHIT_TIKTOK_LOGIN_COMPLETED") {
-        const detected = (event.data.username || "").toLowerCase().trim();
-        if (!detected) return;
-
-        loginCompleted = true;
-        clearTimeout(fallbackTimer);
-        window.removeEventListener("message", onMessage);
-        window.removeEventListener("message", onLoginResult);
-        try { if (fallbackPopup && !fallbackPopup.closed) fallbackPopup.close(); } catch (_) {}
-        setIsVerifying(false);
-
-        if (detected === cleanExpected.toLowerCase()) {
-          setIsTikTokVerified(true);
-          setVerifiedHandle(`@${detected}`);
-          setAuthError(null);
-        } else {
-          setIsTikTokVerified(false);
-          setAuthError(
-            `Access Denied: You signed into TikTok as @${detected}, but this royalty vault belongs strictly to ${creatorHandle}. Only the verified creator can claim.`
-          );
-        }
+      if (
+        token.launcherHandle &&
+        connectedHandle &&
+        token.launcherHandle.toLowerCase() === connectedHandle
+      ) {
+        return true;
       }
-
-      if (event.data?.type === "LAUNCHIT_TIKTOK_WRONG_ACCOUNT") {
-        const detected = (event.data.detected || "").toLowerCase().trim();
-        setIsVerifying(false);
-        setAuthError(
-          `Wrong account detected (@${detected}). TikTok session was wiped. Please enter login credentials for ${creatorHandle} in the login window.`
-        );
+      return !token.launcherWallet;
+    } else {
+      if (token.creatorWallet && connectedWallet && token.creatorWallet === connectedWallet) {
+        return true;
       }
-    };
-
-    window.addEventListener("message", onMessage);
-
-    // Watch for fallback popup close
-    const checkInterval = setInterval(() => {
-      if (fallbackPopup && fallbackPopup.closed) {
-        clearInterval(checkInterval);
-        clearTimeout(fallbackTimer);
-        window.removeEventListener("message", onMessage);
-        window.removeEventListener("message", onLoginResult);
-        if (!loginCompleted && !isTikTokVerified) {
-          handleDirectVerify();
-        }
+      if (
+        creatorHandle &&
+        connectedHandle &&
+        creatorHandle.toLowerCase() === connectedHandle
+      ) {
+        return true;
       }
-    }, 600);
-
-    // Timeout safety
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      clearTimeout(fallbackTimer);
-      window.removeEventListener("message", onMessage);
-      window.removeEventListener("message", onLoginResult);
-      setIsVerifying(false);
-    }, 180000);
-  };
-
-  const handleDirectVerify = () => {
-    setAuthError(null);
-    setIsVerifying(true);
-    const cleanExpected = creatorHandle.replace("@", "").trim();
-
-    const onAuthResult = (event: MessageEvent) => {
-      if (event.data?.type === "LAUNCHIT_TIKTOK_AUTH_RESULT") {
-        window.removeEventListener("message", onAuthResult);
-        clearTimeout(timeoutId);
-        setIsVerifying(false);
-
-        const res = event.data;
-        const detected = (res.username || res.detectedUsername || "").toLowerCase().trim();
-        if (detected) {
-          setDetectedAccount(detected);
-        }
-
-        if (res.success && detected === cleanExpected.toLowerCase()) {
-          setIsTikTokVerified(true);
-          setVerifiedHandle(`@${detected}`);
-          setAuthError(null);
-        } else {
-          setIsTikTokVerified(false);
-          if (detected) {
-            setAuthError(
-              `You are currently signed into TikTok as @${detected}, but this royalty vault belongs strictly to ${creatorHandle}. Please switch accounts to ${creatorHandle} to claim.`
-            );
-          } else {
-            setAuthError(
-              res.error || `No active TikTok login detected in your browser. Please sign into ${creatorHandle} on TikTok.`
-            );
-          }
-        }
+      if (token.launcherWallet && connectedWallet && token.launcherWallet === connectedWallet && !token.creatorWallet) {
+        return true;
       }
-    };
-
-    window.addEventListener("message", onAuthResult);
-
-    const timeoutId = setTimeout(() => {
-      window.removeEventListener("message", onAuthResult);
-      setIsVerifying(false);
-      setAuthError(
-        "Verification Timed Out: LaunchIt Extension not responding. Please make sure the LaunchIt Extension is enabled in chrome://extensions and you are logged into TikTok."
-      );
-    }, 6000);
-
-    window.postMessage(
-      { type: "LAUNCHIT_REQUEST_TIKTOK_AUTH", expectedHandle: cleanExpected },
-      "*"
-    );
-  };
-
-  useEffect(() => {
-    if (claimType === "creator" && !isTikTokVerified) {
-      handleDirectVerify();
+      return false;
     }
-  }, [claimType]);
-
-  const handleLogoutTikTok = () => {
-    setAuthError(null);
-    setIsVerifying(true);
-    setIsTikTokVerified(false);
-    setVerifiedHandle(null);
-    window.postMessage({ type: "LAUNCHIT_REQUEST_LOGOUT" }, "*");
-    const cleanExpected = creatorHandle.replace("@", "").trim();
-    const width = 550;
-    const height = 750;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    window.open(
-      `https://www.tiktok.com/logout#creator=${cleanExpected}`,
-      "TikTokLogin",
-      `width=${width},height=${height},top=${top},left=${left}`
-    );
-    setTimeout(() => {
-      setIsVerifying(false);
-    }, 1500);
   };
 
-  const handleClaim = () => {
-    if (!payoutAddress.trim() || payoutAddress.trim().length < 32) {
-      alert("Please enter a valid 32+ character Solana wallet address.");
+  const handleOpenClaimModal = (role: "creator" | "launcher") => {
+    setClaimType(role);
+    setPayoutAddress(publicKey || currentUser?.solanaWallet || "");
+    setClaimSuccessTx(null);
+    setAuthError(null);
+  };
+
+  const handleClaimSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!claimType) return;
+    setAuthError(null);
+
+    const targetWallet = (payoutAddress || connectedWallet).trim();
+    if (!targetWallet || targetWallet.length < 32) {
+      setAuthError("Please connect your wallet or enter a valid Solana wallet address.");
       return;
     }
 
+    if (!isAuthorizedForRole(claimType)) {
+      setAuthError(
+        claimType === "creator"
+          ? `Connected wallet (${connectedWallet.slice(0, 6)}...) does not match creator ${creatorHandle || token.creatorWallet || "record"}.`
+          : `Connected wallet (${connectedWallet.slice(0, 6)}...) does not match launcher ${token.launcherWallet?.slice(0, 6) || token.launcherHandle || "record"}.`
+      );
+      return;
+    }
+
+    const claimSol = claimType === "creator" ? creatorSol : launcherSol;
+
     setIsClaiming(true);
-    setTimeout(() => {
-      let updated: Token;
-      if (claimType === "creator") {
-        const amt = creatorSol;
-        updated = {
-          ...token,
-          creatorWallet: payoutAddress.trim(),
-          unclaimedCreatorFeesSol: 0,
-          claimedCreatorFeesSol: (token.claimedCreatorFeesSol || 0) + amt,
-        };
-        setClaimSuccessMsg(`Transferred ${amt.toFixed(4)} SOL to Video Creator wallet ${payoutAddress.slice(0, 4)}...${payoutAddress.slice(-4)}!`);
-      } else {
-        const amt = launcherSol;
-        updated = {
-          ...token,
-          launcherWallet: payoutAddress.trim(),
-          unclaimedLauncherFeesSol: 0,
-          claimedLauncherFeesSol: (token.claimedLauncherFeesSol || 0) + amt,
-        };
-        setClaimSuccessMsg(`Transferred ${amt.toFixed(4)} SOL to Coin Launcher wallet ${payoutAddress.slice(0, 4)}...${payoutAddress.slice(-4)}!`);
+    try {
+      const { txSignature } = await claimRoyaltiesOnChain({
+        network,
+        mintAddress: token.mint,
+        symbol: token.symbol,
+        role: claimType,
+        claimSolAmount: claimSol,
+        payoutWallet: targetWallet,
+      });
+
+      if (claimSol > 0) {
+        executeTradeAssets({
+          solDelta: claimSol,
+          mint: token.mint,
+          tokenDelta: 0,
+        });
       }
 
-      onUpdateToken(updated);
+      const updatedToken: Token =
+        claimType === "creator"
+          ? {
+              ...token,
+              creatorWallet: targetWallet,
+              unclaimedCreatorFeesSol: 0,
+              claimedCreatorFeesSol: (token.claimedCreatorFeesSol || 0) + claimSol,
+            }
+          : {
+              ...token,
+              launcherWallet: targetWallet,
+              unclaimedLauncherFeesSol: 0,
+              claimedLauncherFeesSol: (token.claimedLauncherFeesSol || 0) + claimSol,
+            };
+
+      onUpdateToken(updatedToken);
+      setClaimSuccessTx(txSignature);
+      notifyTx(
+        txSignature,
+        `CLAIMED ${claimSol.toFixed(4)} SOL ${claimType.toUpperCase()} ROYALTIES ($${token.symbol})`
+      );
+    } catch (err: any) {
+      setAuthError(err?.message || "Wallet signature cancelled or failed.");
+    } finally {
       setIsClaiming(false);
-    }, 1200);
+    }
   };
 
   return (
-    <>
+    <div
+      className="glass-panel"
+      style={{
+        padding: "16px 20px",
+        background:
+          "linear-gradient(135deg, rgba(255, 96, 0, 0.08) 0%, rgba(20, 241, 149, 0.05) 100%)",
+        border: "1px solid rgba(255, 96, 0, 0.3)",
+        borderRadius: "var(--radius-md)",
+      }}
+    >
+      {/* Top Banner */}
       <div
-        className="glass-panel"
         style={{
-          padding: "18px 20px",
-          background: "linear-gradient(135deg, rgba(255, 96, 0, 0.08) 0%, rgba(20, 241, 149, 0.05) 100%)",
-          border: "1px solid rgba(255, 96, 0, 0.35)",
-          borderRadius: "16px",
           display: "flex",
-          flexDirection: "column",
-          gap: "14px",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "12px",
+          marginBottom: "14px",
         }}
       >
-        {/* Header bar: Fee Split Badge */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Coins size={18} color="#ff8c37" />
-            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#fff" }}>
-              1% Creator Royalty Vaults
-            </span>
-          </div>
-          <span className="badge badge-purple" style={{ fontSize: "0.75rem", padding: "3px 10px", fontWeight: 700 }}>
-            {split === "split_50_50" ? "⚡ 50 / 50 Split (Creator & Launcher)" : split === "creator_100" ? "👑 100% to Video Creator" : "🚀 100% to Coin Launcher"}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Coins size={18} color="#ff8c37" />
+          <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "#fff" }}>
+            1% Creator Royalty Vaults
           </span>
         </div>
 
-        {/* Dual or Single Vault Display */}
-        <div style={{ display: "grid", gridTemplateColumns: split === "split_50_50" ? "1fr 1fr" : "1fr", gap: "12px" }}>
-          {/* Video Creator Vault */}
-          {(split === "split_50_50" || split === "creator_100") && (
-            <div
-              style={{
-                background: "rgba(0, 0, 0, 0.25)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
-                borderRadius: "12px",
-                padding: "12px 14px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span>Video Owner:</span>
-                  <b style={{ color: "var(--solana-cyan)" }}>{creatorHandle}</b>
-                </div>
-                <div className="mono" style={{ fontSize: "1.1rem", fontWeight: 800, color: "#14f195", marginTop: "2px" }}>
-                  {creatorSol.toFixed(4)} SOL <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>(${ (creatorSol * 150).toFixed(2) })</span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setClaimType("creator");
-                  setPayoutAddress(token.creatorWallet || "");
-                }}
-                className="btn-secondary"
-                style={{ padding: "6px 12px", fontSize: "0.75rem", fontWeight: 700, borderRadius: "8px" }}
-              >
-                {hasCreatorWallet ? "Claimed" : "Claim as Creator"}
-              </button>
-            </div>
-          )}
+        <span
+          style={{
+            fontSize: "0.72rem",
+            padding: "4px 10px",
+            borderRadius: "999px",
+            background: "rgba(153, 69, 255, 0.15)",
+            color: "#c084fc",
+            border: "1px solid rgba(153, 69, 255, 0.35)",
+            fontWeight: 700,
+          }}
+        >
+          ⚡{" "}
+          {split === "creator_100"
+            ? "100% Video Creator"
+            : split === "launcher_100"
+            ? "100% Coin Launcher"
+            : "50 / 50 Split (Creator & Launcher)"}
+        </span>
+      </div>
 
-          {/* Launcher / Hunter Vault */}
-          {(split === "split_50_50" || split === "launcher_100") && (
-            <div
-              style={{
-                background: "rgba(0, 0, 0, 0.25)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
-                borderRadius: "12px",
-                padding: "12px 14px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span>Coin Launcher:</span>
-                  <b style={{ color: "#ff8c37" }}>{hasLauncherWallet ? `${token.launcherWallet?.slice(0, 4)}...${token.launcherWallet?.slice(-4)}` : "You (Deployer)"}</b>
-                </div>
-                <div className="mono" style={{ fontSize: "1.1rem", fontWeight: 800, color: "#ff8c37", marginTop: "2px" }}>
-                  {launcherSol.toFixed(4)} SOL <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>(${ (launcherSol * 150).toFixed(2) })</span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setClaimType("launcher");
-                  setPayoutAddress(token.launcherWallet || "");
-                }}
-                style={{
-                  padding: "6px 12px",
-                  fontSize: "0.75rem",
-                  fontWeight: 800,
-                  borderRadius: "8px",
-                  background: "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)",
-                  color: "#fff",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                {hasLauncherWallet ? "Payout Linked" : "Claim as Launcher"}
-              </button>
+      {/* Vaults Grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: "12px",
+        }}
+      >
+        {/* Creator Vault */}
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: "var(--radius-sm)",
+            background: "rgba(10, 11, 16, 0.65)",
+            border: "1px solid var(--border-subtle)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Video Owner:{" "}
+              <b style={{ color: "var(--solana-cyan)" }}>
+                {creatorHandle || (token.creatorWallet ? `${token.creatorWallet.slice(0, 4)}...${token.creatorWallet.slice(-4)}` : "Unclaimed")}
+              </b>
             </div>
-          )}
+            <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
+              <span
+                className="mono"
+                style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--solana-green)" }}
+              >
+                {creatorSol.toFixed(4)} SOL
+              </span>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                (${(creatorSol * 150).toFixed(2)})
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleOpenClaimModal("creator")}
+            className={creatorSol > 0 ? "btn-primary" : "btn-secondary"}
+            style={{ padding: "8px 12px", fontSize: "0.75rem" }}
+          >
+            {token.creatorWallet && creatorSol === 0 ? "Wallet Linked" : "Claim as Creator"}
+          </button>
+        </div>
+
+        {/* Launcher Vault */}
+        <div
+          style={{
+            padding: "12px 14px",
+            borderRadius: "var(--radius-sm)",
+            background: "rgba(10, 11, 16, 0.65)",
+            border: "1px solid var(--border-subtle)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Coin Launcher:{" "}
+              <b style={{ color: "#ff8c37" }}>
+                {token.launcherWallet
+                  ? `${token.launcherWallet.slice(0, 4)}...${token.launcherWallet.slice(-4)}`
+                  : token.launcherHandle || "Unlinked"}
+              </b>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
+              <span
+                className="mono"
+                style={{ fontSize: "1.1rem", fontWeight: 800, color: "#ff8c37" }}
+              >
+                {launcherSol.toFixed(4)} SOL
+              </span>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                (${(launcherSol * 150).toFixed(2)})
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleOpenClaimModal("launcher")}
+            className="btn-primary"
+            style={{ padding: "8px 12px", fontSize: "0.75rem" }}
+          >
+            {launcherSol > 0
+              ? "Claim Fees"
+              : token.launcherWallet
+              ? "Payout Linked"
+              : "Link Wallet"}
+          </button>
         </div>
       </div>
 
-      {/* Claim Modal */}
+      {/* On-Chain Wallet Claim Modal */}
       {claimType && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            backgroundColor: "rgba(0, 0, 0, 0.82)",
             backdropFilter: "blur(8px)",
             display: "flex",
             alignItems: "center",
@@ -376,227 +337,168 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
             className="glass-panel-elevated"
             style={{
               width: "100%",
-              maxWidth: "520px",
-              padding: "28px",
-              position: "relative",
-              border: claimType === "creator" ? "1px solid rgba(20, 241, 149, 0.4)" : "1px solid rgba(255, 96, 0, 0.4)",
-              borderRadius: "20px",
+              maxWidth: "460px",
+              padding: "24px",
+              border: "1px solid rgba(255, 96, 0, 0.4)",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <Coins size={24} color={claimType === "creator" ? "#14f195" : "#ff8c37"} />
-                <h3 style={{ fontSize: "1.2rem", fontWeight: 800, margin: 0 }}>
-                  {claimType === "creator" ? `Claim Royalties for ${creatorHandle}` : "Claim Coin Launcher Royalties"}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <ShieldCheck size={20} color="var(--solana-green)" />
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800 }}>
+                  {claimType === "creator"
+                    ? "Claim Video Creator Royalties"
+                    : "Claim Coin Launcher Royalties"}
                 </h3>
               </div>
               <button
-                onClick={() => {
-                  setClaimType(null);
-                  setClaimSuccessMsg(null);
-                  setIsTikTokVerified(false);
-                }}
-                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
+                type="button"
+                onClick={() => setClaimType(null)}
+                style={{ background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {claimSuccessMsg ? (
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <CheckCircle2 size={48} color="#14f195" style={{ margin: "0 auto 12px" }} />
-                <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#14f195" }}>Payout Address Registered!</h4>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "6px" }}>
-                  {claimSuccessMsg}
-                </p>
+            {claimSuccessTx ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "16px 0",
+                  textAlign: "center",
+                }}
+              >
+                <CheckCircle2 size={42} color="var(--solana-green)" />
+                <div style={{ fontSize: "1rem", fontWeight: 800, color: "#ffffff" }}>
+                  Royalties Claimed & Linked On-Chain!
+                </div>
+                <a
+                  href={`https://solscan.io/tx/${encodeURIComponent(claimSuccessTx)}${
+                    network === "devnet" ? "?cluster=devnet" : ""
+                  }`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary"
+                  style={{ padding: "8px 14px", fontSize: "0.8rem" }}
+                >
+                  <span>View Transaction on Solscan</span>
+                  <ExternalLink size={13} />
+                </a>
                 <button
-                  onClick={() => {
-                    setClaimType(null);
-                    setClaimSuccessMsg(null);
-                    setIsTikTokVerified(false);
-                  }}
+                  type="button"
+                  onClick={() => setClaimType(null)}
                   className="btn-primary"
-                  style={{ marginTop: "16px", width: "100%" }}
+                  style={{ width: "100%", marginTop: "6px" }}
                 >
                   Done
                 </button>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <div style={{ background: "rgba(255, 255, 255, 0.03)", borderRadius: "12px", padding: "14px", border: "1px solid var(--border-subtle)" }}>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    {claimType === "creator" ? "Accrued Video Owner Royalties" : "Accrued Launcher / Deployer Royalties"}
+              <form onSubmit={handleClaimSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div
+                  style={{
+                    padding: "12px",
+                    borderRadius: "10px",
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-subtle)",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <div style={{ color: "var(--text-muted)", marginBottom: "4px" }}>
+                    Unclaimed {claimType === "creator" ? "Creator" : "Launcher"} Vault Balance:
                   </div>
-                  <div className="mono" style={{ fontSize: "1.6rem", fontWeight: 800, color: claimType === "creator" ? "#14f195" : "#ff8c37", marginTop: "4px" }}>
-                    {(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL{" "}
-                    <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>
-                      (${ ((claimType === "creator" ? creatorSol : launcherSol) * 150).toFixed(2) })
-                    </span>
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                    {split === "split_50_50" ? "50% of the 1% trading volume automatically routes here." : "100% of creator trading fees route here."}
+                  <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--solana-green)" }}>
+                    {(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL
                   </div>
                 </div>
 
-                {/* Step 1: Real TikTok Sign-in Verification */}
-                {!isTikTokVerified ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    {/* Status Overview Card */}
-                    <div
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.78rem",
+                      color: "var(--text-muted)",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Destination Solana Wallet Address
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <Wallet
+                      size={15}
+                      color="var(--text-muted)"
                       style={{
-                        background: "rgba(255, 255, 255, 0.04)",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
-                        borderRadius: "14px",
-                        padding: "16px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "10px",
+                        position: "absolute",
+                        left: "12px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
                       }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Target Creator Account:</span>
-                        <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#14f195" }}>{creatorHandle}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Active TikTok in Chrome:</span>
-                        <span
-                          style={{
-                            fontSize: "0.95rem",
-                            fontWeight: 700,
-                            color: detectedAccount
-                              ? detectedAccount === creatorHandle.replace("@", "").trim().toLowerCase()
-                                ? "#14f195"
-                                : "#fca5a5"
-                              : "#94a3b8",
-                          }}
-                        >
-                          {detectedAccount ? `@${detectedAccount}` : isVerifying ? "Detecting..." : "None Detected"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {authError && (
-                      <div
-                        style={{
-                          background: "rgba(239, 68, 68, 0.12)",
-                          border: "1px solid rgba(239, 68, 68, 0.4)",
-                          borderRadius: "12px",
-                          padding: "14px",
-                          color: "#fca5a5",
-                          fontSize: "0.85rem",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        <div style={{ fontWeight: 800, marginBottom: "4px" }}>⚠️ Account Mismatch / Switch Required</div>
-                        <div>{authError}</div>
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {/* One Single Clean Button: Sign in with TikTok */}
-                      <button
-                        type="button"
-                        onClick={handleOpenTikTokSignIn}
-                        disabled={isVerifying}
-                        style={{
-                          width: "100%",
-                          padding: "16px",
-                          borderRadius: "14px",
-                          border: "1px solid rgba(255, 255, 255, 0.2)",
-                          background: isVerifying ? "rgba(255, 96, 0, 0.6)" : "#000000",
-                          color: "#ffffff",
-                          fontSize: "1rem",
-                          fontWeight: 800,
-                          cursor: isVerifying ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "10px",
-                          boxShadow: "0 6px 20px rgba(0, 0, 0, 0.5)",
-                          transition: "all 0.2s ease",
-                        }}
-                      >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.42a6.34 6.34 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.71a8.18 8.18 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1-.09z" />
-                        </svg>
-                        <span>{isVerifying ? "Waiting for Sign In..." : "Sign in with TikTok"}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleLogoutTikTok}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#94a3b8",
-                          fontSize: "0.78rem",
-                          textDecoration: "underline",
-                          cursor: "pointer",
-                          padding: "6px 0",
-                          textAlign: "center",
-                          width: "100%",
-                        }}
-                      >
-                        Signed into wrong TikTok account? Click here to switch account
-                      </button>
-                    </div>
+                    />
+                    <input
+                      type="text"
+                      required
+                      value={payoutAddress}
+                      onChange={(e) => setPayoutAddress(e.target.value)}
+                      placeholder="Your Solana wallet address..."
+                      className="mono"
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px 10px 36px",
+                        borderRadius: "8px",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        color: "#ffffff",
+                        fontSize: "0.82rem",
+                      }}
+                    />
                   </div>
-                ) : (
-                  /* Step 2: 100% Genuine Match -> Enter Solana Payout Wallet */
-                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={{ background: "rgba(20, 241, 149, 0.12)", border: "1px solid rgba(20, 241, 149, 0.4)", borderRadius: "10px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
-                      <CheckCircle2 size={18} color="#14f195" />
-                      <div style={{ fontSize: "0.82rem", color: "#14f195" }}>
-                        Verified as <b>{verifiedHandle}</b> on TikTok!
-                      </div>
-                    </div>
+                </div>
 
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "6px" }}>
-                        Where should we send your {(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL? (Phantom / Solflare / Coinbase)
-                      </label>
-                      <input
-                        type="text"
-                        value={payoutAddress}
-                        onChange={(e) => setPayoutAddress(e.target.value)}
-                        placeholder="e.g. 7WdK...9R2e"
-                        className="mono"
-                        style={{
-                          width: "100%",
-                          boxSizing: "border-box",
-                          background: "var(--bg-card)",
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: "10px",
-                          padding: "12px 14px",
-                          color: "#fff",
-                          fontSize: "0.85rem",
-                        }}
-                      />
-                    </div>
-
-                    <button
-                      onClick={handleClaim}
-                      disabled={isClaiming || !payoutAddress.trim()}
-                      className="btn-primary"
-                      style={{
-                        padding: "14px",
-                        fontWeight: 800,
-                        fontSize: "0.95rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      {isClaiming ? "Transferring SOL to Wallet..." : `Withdraw & Route ${(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL`}
-                    </button>
+                {authError && (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      background: "rgba(239, 68, 68, 0.14)",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      color: "#fca5a5",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    {authError}
                   </div>
                 )}
-              </div>
+
+                <button
+                  type="submit"
+                  disabled={isClaiming}
+                  className="btn-primary"
+                  style={{ width: "100%", padding: "12px" }}
+                >
+                  <Zap size={16} />
+                  <span>
+                    {isClaiming
+                      ? "Waiting for Wallet Signature..."
+                      : (claimType === "creator" ? creatorSol : launcherSol) > 0
+                      ? `Sign & Claim ${(claimType === "creator" ? creatorSol : launcherSol).toFixed(4)} SOL`
+                      : "Sign & Verify Payout Wallet"}
+                  </span>
+                </button>
+              </form>
             )}
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };

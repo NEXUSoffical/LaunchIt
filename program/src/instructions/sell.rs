@@ -4,7 +4,7 @@ use anchor_spl::token_2022::{self, TransferChecked};
 use crate::curve::CurveMath;
 use crate::errors::LaunchpadError;
 use crate::state::{
-    BondingCurve, LaunchpadConfig, TradeEvent,
+    BondingCurve, OrbitBurnEvent, OrbitLaunchConfig, TradeEvent,
     BONDING_CURVE_SEED, CONFIG_SEED, CURVE_VAULT_SEED,
 };
 
@@ -14,17 +14,25 @@ pub struct Sell<'info> {
     pub seller: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [CONFIG_SEED],
         bump = config.bump
     )]
-    pub config: Account<'info, LaunchpadConfig>,
+    pub config: Account<'info, OrbitLaunchConfig>,
 
-    /// CHECK: Validated against config.fee_recipient
+    /// CHECK: Validated against config.treasury
     #[account(
         mut,
-        constraint = fee_recipient.key() == config.fee_recipient @ LaunchpadError::Unauthorized
+        constraint = treasury.key() == config.treasury @ LaunchpadError::Unauthorized
     )]
-    pub fee_recipient: AccountInfo<'info>,
+    pub treasury: AccountInfo<'info>,
+
+    /// CHECK: Validated against config.burn_address
+    #[account(
+        mut,
+        constraint = burn_address.key() == config.burn_address @ LaunchpadError::Unauthorized
+    )]
+    pub burn_address: AccountInfo<'info>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -57,28 +65,28 @@ pub struct Sell<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Sell>, token_amount_in: u64, min_sol_out: u64) -> Result<()> {
+pub fn handler(ctx: Context<Sell>, token_amount_in: u64, min_orbit_out: u64) -> Result<()> {
     let bonding_curve = &mut ctx.accounts.bonding_curve;
     require!(!bonding_curve.complete, LaunchpadError::BondingCurveComplete);
 
-    let config = &ctx.accounts.config;
+    let config = &mut ctx.accounts.config;
 
-    // 1. Calculate SOL gross output from constant product curve
-    let sol_gross_out = CurveMath::calculate_sell_sol_out(
-        bonding_curve.virtual_sol_reserves,
+    // 1. Calculate $ORBIT gross output from constant product curve
+    let orbit_gross_out = CurveMath::calculate_sell_orbit_out(
+        bonding_curve.virtual_orbit_reserves,
         bonding_curve.virtual_token_reserves,
-        bonding_curve.real_sol_reserves,
+        bonding_curve.real_orbit_reserves,
         token_amount_in,
     )?;
 
-    // 2. Calculate protocol fee & net SOL to seller
-    let fee = CurveMath::calculate_fee(sol_gross_out, config.fee_basis_points)?;
-    let sol_net_out = sol_gross_out
-        .checked_sub(fee)
+    // 2. Calculate protocol fee & net $ORBIT to seller
+    let total_fee = CurveMath::calculate_fee(orbit_gross_out, config.fee_basis_points)?;
+    let orbit_net_out = orbit_gross_out
+        .checked_sub(total_fee)
         .ok_or(LaunchpadError::MathOverflow)?;
 
     // 3. Slippage check
-    require!(sol_net_out >= min_sol_out, LaunchpadError::SlippageExceeded);
+    require!(orbit_net_out >= min_orbit_out, LaunchpadError::SlippageExceeded);
 
     // 4. Transfer tokens from seller ATA to curve vault
     token_2022::transfer_checked(
@@ -95,33 +103,62 @@ pub fn handler(ctx: Context<Sell>, token_amount_in: u64, min_sol_out: u64) -> Re
         6, // decimals
     )?;
 
-    // 5. Transfer SOL from bonding curve PDA to seller & fee recipient
+    let clock = Clock::get()?;
+
+    // 5. Split fee: 50% Burned forever 🔥 / 50% Protocol Treasury
+    let (burn_amt, treasury_amt) = CurveMath::calculate_fee_split(
+        total_fee,
+        config.burn_split_basis_points,
+    )?;
+
+    // Transfer $ORBIT lamports from bonding curve PDA to seller, burn address, and treasury
     **bonding_curve.to_account_info().try_borrow_mut_lamports()? = bonding_curve
         .to_account_info()
         .lamports()
-        .checked_sub(sol_gross_out)
+        .checked_sub(orbit_gross_out)
         .ok_or(LaunchpadError::MathOverflow)?;
 
     **ctx.accounts.seller.try_borrow_mut_lamports()? = ctx
         .accounts
         .seller
         .lamports()
-        .checked_add(sol_net_out)
+        .checked_add(orbit_net_out)
         .ok_or(LaunchpadError::MathOverflow)?;
 
-    if fee > 0 {
-        **ctx.accounts.fee_recipient.try_borrow_mut_lamports()? = ctx
+    if burn_amt > 0 {
+        **ctx.accounts.burn_address.try_borrow_mut_lamports()? = ctx
             .accounts
-            .fee_recipient
+            .burn_address
             .lamports()
-            .checked_add(fee)
+            .checked_add(burn_amt)
+            .ok_or(LaunchpadError::MathOverflow)?;
+
+        config.total_orbit_burned = config
+            .total_orbit_burned
+            .checked_add(burn_amt)
+            .ok_or(LaunchpadError::MathOverflow)?;
+
+        emit!(OrbitBurnEvent {
+            amount_burned: burn_amt,
+            total_burned_to_date: config.total_orbit_burned,
+            reason: "Trade Fee Burn (Sell)".to_string(),
+            timestamp: clock.unix_timestamp,
+        });
+    }
+
+    if treasury_amt > 0 {
+        **ctx.accounts.treasury.try_borrow_mut_lamports()? = ctx
+            .accounts
+            .treasury
+            .lamports()
+            .checked_add(treasury_amt)
             .ok_or(LaunchpadError::MathOverflow)?;
     }
 
     // 6. Update curve reserves
-    bonding_curve.virtual_sol_reserves = bonding_curve
-        .virtual_sol_reserves
-        .checked_sub(sol_gross_out)
+    bonding_curve.virtual_orbit_reserves = bonding_curve
+        .virtual_orbit_reserves
+        .checked_sub(orbit_gross_out)
         .ok_or(LaunchpadError::MathOverflow)?;
 
     bonding_curve.virtual_token_reserves = bonding_curve
@@ -129,9 +166,9 @@ pub fn handler(ctx: Context<Sell>, token_amount_in: u64, min_sol_out: u64) -> Re
         .checked_add(token_amount_in)
         .ok_or(LaunchpadError::MathOverflow)?;
 
-    bonding_curve.real_sol_reserves = bonding_curve
-        .real_sol_reserves
-        .checked_sub(sol_gross_out)
+    bonding_curve.real_orbit_reserves = bonding_curve
+        .real_orbit_reserves
+        .checked_sub(orbit_gross_out)
         .ok_or(LaunchpadError::MathOverflow)?;
 
     bonding_curve.real_token_reserves = bonding_curve
@@ -139,21 +176,21 @@ pub fn handler(ctx: Context<Sell>, token_amount_in: u64, min_sol_out: u64) -> Re
         .checked_add(token_amount_in)
         .ok_or(LaunchpadError::MathOverflow)?;
 
-    let clock = Clock::get()?;
-
     emit!(TradeEvent {
         mint: ctx.accounts.mint.key(),
         user: ctx.accounts.seller.key(),
         is_buy: false,
-        sol_amount: sol_gross_out,
+        orbit_amount: orbit_gross_out,
         token_amount: token_amount_in,
-        virtual_sol_reserves: bonding_curve.virtual_sol_reserves,
+        virtual_orbit_reserves: bonding_curve.virtual_orbit_reserves,
         virtual_token_reserves: bonding_curve.virtual_token_reserves,
-        real_sol_reserves: bonding_curve.real_sol_reserves,
+        real_orbit_reserves: bonding_curve.real_orbit_reserves,
         real_token_reserves: bonding_curve.real_token_reserves,
-        fee_amount: fee,
+        fee_treasury: treasury_amt,
+        fee_burned: burn_amt,
         timestamp: clock.unix_timestamp,
     });
 
     Ok(())
 }
+

@@ -5,6 +5,7 @@ export interface Token {
   symbol: string;
   description: string;
   image: string;
+  videoUrl?: string;
   creator: string;
   creatorHandle?: string;
   launcherHandle?: string;

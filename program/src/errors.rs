@@ -34,4 +34,11 @@ pub enum LaunchpadError {
 
     #[msg("Token metadata URI exceeds maximum 200 bytes.")]
     UriTooLong,
+
+    #[msg("Burn split basis points cannot exceed 10000 (100%).")]
+    InvalidBurnSplit,
+
+    #[msg("Insufficient $ORBIT creation fee provided.")]
+    InsufficientCreationFee,
 }
+

@@ -2,7 +2,8 @@ import React, { useState, useMemo } from "react";
 import { Token, Trade } from "../types";
 import { useWallet } from "../context/WalletContext";
 import { ClientCurve } from "../utils/curve";
-import { ArrowDownUp, Settings, CheckCircle2, AlertCircle, Zap } from "lucide-react";
+import { executeTradeOnChain } from "../services/solanaOnChain";
+import { Settings, CheckCircle2, AlertCircle, Zap } from "lucide-react";
 
 interface SwapWidgetProps {
   token: Token;
@@ -13,93 +14,158 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
   token,
   onTradeExecuted,
 }) => {
-  const { balance, deductSol, addSol, userTokens, updateTokenBalance } = useWallet();
+  const { balance, network, userTokens, executeTradeAssets, notifyTx, publicKey } = useWallet();
 
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [solAmount, setSolAmount] = useState<string>("0.5");
-  const [tokenAmount, setTokenAmount] = useState<string>("5000000");
+  const [tokenAmount, setTokenAmount] = useState<string>("");
   const [slippage, setSlippage] = useState<number>(1.0); // 1%
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isSwapping, setIsSwapping] = useState<boolean>(false);
 
   const userTokenBalance = userTokens[token.mint] || 0;
+  const isTokenGraduated =
+    token.isGraduated ||
+    (token.progressPercent !== undefined && token.progressPercent >= 100) ||
+    token.realTokenReserves <= 0;
 
-  // Real-time quote calculations
+  // Real-time quote calculations in SOL
   const buyQuote = useMemo(() => {
-    const val = parseFloat(solAmount) || 0;
-    return ClientCurve.calculateBuyQuote(val, token.realSolReserves, token.realTokenReserves);
-  }, [solAmount, token.realSolReserves, token.realTokenReserves]);
+    const solVal = parseFloat(solAmount) || 0;
+    return ClientCurve.calculateBuyQuote(
+      solVal,
+      token.realSolReserves,
+      token.realTokenReserves,
+      isTokenGraduated
+    );
+  }, [solAmount, token.realSolReserves, token.realTokenReserves, isTokenGraduated]);
 
   const sellQuote = useMemo(() => {
     const val = parseFloat(tokenAmount) || 0;
-    return ClientCurve.calculateSellQuote(val, token.realSolReserves, token.realTokenReserves);
-  }, [tokenAmount, token.realSolReserves, token.realTokenReserves]);
+    const baseQuote = ClientCurve.calculateSellQuote(
+      val,
+      token.realSolReserves,
+      token.realTokenReserves,
+      isTokenGraduated
+    );
+    const sellRatio = userTokenBalance > 0 ? Math.min(1.0, val / userTokenBalance) : 0;
+    const estSol =
+      token.realSolReserves > 0
+        ? token.realSolReserves * sellRatio * 0.99
+        : baseQuote.solOut || val * (token.priceSol || 0.00000003) * 0.99;
+
+    return {
+      ...baseQuote,
+      solOut: Math.max(0, estSol),
+      priceImpact: Math.min(100, Math.max(0.1, sellRatio * 100)),
+    };
+  }, [tokenAmount, token.realSolReserves, token.realTokenReserves, isTokenGraduated, userTokenBalance, token.priceSol]);
 
   const handleSwap = async () => {
     setStatusMsg(null);
     setIsSwapping(true);
 
     try {
+      const shortTrader = publicKey
+        ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`
+        : "Trader";
+
       if (mode === "buy") {
-        const val = parseFloat(solAmount);
-        if (isNaN(val) || val <= 0) {
+        const solVal = parseFloat(solAmount);
+        if (isNaN(solVal) || solVal <= 0) {
           setStatusMsg({ type: "error", text: "Please enter a valid SOL amount" });
           setIsSwapping(false);
           return;
         }
 
-        if (val > balance) {
-          setStatusMsg({ type: "error", text: "Insufficient SOL balance" });
+        if (solVal > balance) {
+          setStatusMsg({
+            type: "error",
+            text: `Insufficient SOL balance (You have ${balance.toFixed(3)} SOL)`,
+          });
           setIsSwapping(false);
           return;
         }
 
-        // Deduct SOL and update balances
-        deductSol(val);
         const tokensReceived = Math.round(buyQuote.tokensOut || 0);
-        updateTokenBalance(token.mint, tokensReceived);
 
-        // Update Token bonding curve state
-        const newRealSol = token.realSolReserves + (val * 0.99);
-        const newRealTokens = Math.max(0, token.realTokenReserves - tokensReceived);
-        const newProgress = ClientCurve.getProgress(newRealSol);
-        const mc = ClientCurve.getMarketCap(newRealSol, newRealTokens);
+        // Prompt Phantom / Solflare to sign & send the real on-chain Buy transaction
+        const { txSignature } = await executeTradeOnChain({
+          network,
+          mode: "buy",
+          mintAddress: token.mint,
+          symbol: token.symbol,
+          solAmount: solVal,
+          tokenAmount: tokensReceived,
+          launcherWallet: token.launcherWallet,
+          creatorWallet: token.creatorWallet,
+        });
 
-        const totalFeeBuy = val * 0.01;
+        executeTradeAssets({
+          solDelta: -solVal,
+          mint: token.mint,
+          tokenDelta: tokensReceived,
+        });
+
+        const isGraduated = isTokenGraduated || token.realSolReserves + solVal * 0.99 >= 85.0;
+        const newRealSol = token.realSolReserves + solVal * 0.99;
+        const newRealTokens = isGraduated ? 0 : Math.max(0, token.realTokenReserves - tokensReceived);
+        const progressPercent = isGraduated ? 100.0 : ClientCurve.getProgress(newRealSol);
+
+        const currentPrice = token.priceSol || 0.000000028;
+        const buyStep = Math.min(0.35, Math.max(0.025, (solVal / 10.0) * 0.12 + 0.03));
+        const newSpotPrice = currentPrice * (1 + buyStep);
+        const mc = { sol: newSpotPrice * 1_000_000_000, usd: newSpotPrice * 1_000_000_000 * 150 };
+
+        const totalFeeBuy = solVal * 0.01;
         const split = token.feeSplit || "split_50_50";
-        const creatorFeeBuy = split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeBuy : totalFeeBuy * 0.5;
-        const launcherFeeBuy = split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeBuy : totalFeeBuy * 0.5;
+        const creatorFeeBuy =
+          split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeBuy : totalFeeBuy * 0.5;
+        const launcherFeeBuy =
+          split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeBuy : totalFeeBuy * 0.5;
 
         const updatedToken: Token = {
           ...token,
           realSolReserves: newRealSol,
           realTokenReserves: newRealTokens,
-          progressPercent: newProgress,
+          progressPercent,
+          isGraduated,
+          priceSol: newSpotPrice,
           marketCapSol: mc.sol,
           marketCapUsd: mc.usd,
-          volume24hSol: token.volume24hSol + val,
+          volume24hSol: token.volume24hSol + solVal,
           unclaimedCreatorFeesSol: (token.unclaimedCreatorFeesSol || 0) + creatorFeeBuy,
           unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeBuy,
-          isGraduated: newProgress >= 100,
         };
 
         const newTrade: Trade = {
           id: `tx-${Date.now()}`,
           mint: token.mint,
-          user: "You (Sol9...8jE1)",
+          user: shortTrader,
           isBuy: true,
-          solAmount: val,
+          solAmount: solVal,
           tokenAmount: tokensReceived,
-          priceSol: buyQuote.pricePerTokenSol,
+          priceSol: newSpotPrice,
           timestamp: Date.now(),
-          txHash: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
+          txHash: txSignature,
         };
 
         onTradeExecuted(newTrade, updatedToken);
+        setSolAmount("");
+        notifyTx(
+          newTrade.txHash,
+          isGraduated && !token.isGraduated
+            ? `🎓 GRADUATED TO RAYDIUM DEX! 100% BONDED! BOUGHT ${(tokensReceived / 1e6).toFixed(2)}M $${token.symbol}`
+            : `SWAP CONFIRMED: BOUGHT ${(tokensReceived / 1e6).toFixed(2)}M $${token.symbol} for ${solVal.toFixed(3)} SOL`,
+          Math.floor(Date.now() / 400) % 100000
+        );
         setStatusMsg({
           type: "success",
-          text: `Successfully bought ${(tokensReceived / 1e6).toFixed(2)}M $${token.symbol}! (1% Fee routed to Vault)`,
+          text:
+            isGraduated && !token.isGraduated
+              ? `🎓 GRADUATED! $${token.symbol} reached 85 SOL and migrated liquidity to Raydium DEX!`
+              : `Successfully bought ${(tokensReceived / 1e6).toFixed(2)}M $${token.symbol} for ${solVal.toFixed(3)} SOL!`,
         });
       } else {
         // Sell
@@ -110,31 +176,85 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           return;
         }
 
-        if (val > userTokenBalance) {
-          setStatusMsg({ type: "error", text: `Insufficient $${token.symbol} balance` });
+        if (userTokenBalance <= 0) {
+          setStatusMsg({ type: "error", text: `You have 0 $${token.symbol} tokens to sell` });
           setIsSwapping(false);
           return;
         }
 
-        const solReceived = sellQuote.solOut || 0;
-        updateTokenBalance(token.mint, -val);
-        addSol(solReceived);
+        const isSellAll = val >= userTokenBalance * 0.995 || val >= userTokenBalance - 1;
+        const actualTokensToSell = isSellAll ? userTokenBalance : Math.min(val, userTokenBalance);
+        const sellRatio = isSellAll
+          ? 1.0
+          : Math.min(1.0, Math.max(0, actualTokensToSell / Math.max(1, userTokenBalance)));
 
-        const newRealSol = Math.max(0, token.realSolReserves - solReceived);
-        const newRealTokens = token.realTokenReserves + val;
-        const newProgress = ClientCurve.getProgress(newRealSol);
-        const mc = ClientCurve.getMarketCap(newRealSol, newRealTokens);
+        const baseFloorPrice = 0.000000028;
+        const currentPrice = token.priceSol || baseFloorPrice;
+
+        const solReceived = isSellAll
+          ? token.realSolReserves > 0
+            ? token.realSolReserves
+            : sellQuote.solOut || actualTokensToSell * currentPrice * 0.99
+          : token.realSolReserves > 0
+          ? token.realSolReserves * sellRatio
+          : sellQuote.solOut || actualTokensToSell * currentPrice * 0.99;
+
+        // Prompt Phantom / Solflare to sign & send the real on-chain Sell transaction
+        const { txSignature } = await executeTradeOnChain({
+          network,
+          mode: "sell",
+          mintAddress: token.mint,
+          symbol: token.symbol,
+          solAmount: solReceived,
+          tokenAmount: actualTokensToSell,
+          launcherWallet: token.launcherWallet,
+          creatorWallet: token.creatorWallet,
+        });
+
+        executeTradeAssets({
+          solDelta: solReceived,
+          mint: token.mint,
+          exactTokens: isSellAll ? 0 : undefined,
+          tokenDelta: isSellAll ? undefined : -actualTokensToSell,
+        });
+
+        const isAlreadyGraduated = isTokenGraduated;
+        const newRealSol = isAlreadyGraduated
+          ? isSellAll
+            ? 85.0
+            : Math.max(85.0, token.realSolReserves - solReceived * 0.5)
+          : isSellAll
+          ? 0.0
+          : Math.max(0, token.realSolReserves * (1 - sellRatio));
+        const newRealTokens = isAlreadyGraduated
+          ? 0
+          : Math.min(800_000_000, token.realTokenReserves + actualTokensToSell);
+        const progressPercent = isAlreadyGraduated ? 100.0 : ClientCurve.getProgress(newRealSol);
+        const isGraduated = isAlreadyGraduated;
+
+        let newSpotPrice: number;
+        if (isSellAll || sellRatio >= 0.999) {
+          newSpotPrice = baseFloorPrice;
+        } else {
+          newSpotPrice = Math.max(baseFloorPrice, currentPrice - (currentPrice - baseFloorPrice) * sellRatio);
+        }
+
+        const mc = { sol: newSpotPrice * 1_000_000_000, usd: newSpotPrice * 1_000_000_000 * 150 };
 
         const totalFeeSell = solReceived * 0.01;
         const split = token.feeSplit || "split_50_50";
-        const creatorFeeSell = split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeSell : totalFeeSell * 0.5;
-        const launcherFeeSell = split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeSell : totalFeeSell * 0.5;
+        const creatorFeeSell =
+          split === "launcher_100" ? 0 : split === "creator_100" ? totalFeeSell : totalFeeSell * 0.5;
+        const launcherFeeSell =
+          split === "creator_100" ? 0 : split === "launcher_100" ? totalFeeSell : totalFeeSell * 0.5;
 
         const updatedToken: Token = {
           ...token,
           realSolReserves: newRealSol,
           realTokenReserves: newRealTokens,
-          progressPercent: newProgress,
+          progressPercent,
+          isGraduated,
+          priceSol: newSpotPrice,
           marketCapSol: mc.sol,
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + solReceived,
@@ -145,21 +265,32 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         const newTrade: Trade = {
           id: `tx-${Date.now()}`,
           mint: token.mint,
-          user: "You (Sol9...8jE1)",
+          user: shortTrader,
           isBuy: false,
           solAmount: solReceived,
-          tokenAmount: val,
-          priceSol: sellQuote.pricePerTokenSol,
+          tokenAmount: actualTokensToSell,
+          priceSol: newSpotPrice,
           timestamp: Date.now(),
-          txHash: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
+          txHash: txSignature,
         };
 
         onTradeExecuted(newTrade, updatedToken);
+        setTokenAmount("");
+        notifyTx(
+          newTrade.txHash,
+          `SWAP CONFIRMED: SOLD ${(actualTokensToSell / 1e6).toFixed(2)}M $${token.symbol} for ${solReceived.toFixed(4)} SOL`,
+          Math.floor(Date.now() / 400) % 100000
+        );
         setStatusMsg({
           type: "success",
-          text: `Successfully sold ${(val / 1e6).toFixed(2)}M $${token.symbol} for ${solReceived.toFixed(3)} SOL!`,
+          text: `Successfully sold ${(actualTokensToSell / 1e6).toFixed(2)}M $${token.symbol} for ${solReceived.toFixed(4)} SOL!`,
         });
       }
+    } catch (err: any) {
+      setStatusMsg({
+        type: "error",
+        text: err?.message || "Transaction rejected or failed in wallet.",
+      });
     } finally {
       setIsSwapping(false);
     }
@@ -266,7 +397,9 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "6px" }}>
             <span>You Pay (SOL)</span>
-            <span>Balance: <b style={{ color: "var(--text-primary)" }}>{balance.toFixed(2)} SOL</b></span>
+            <span>
+              Balance: <b style={{ color: "var(--text-primary)" }}>{balance.toFixed(3)} SOL</b>
+            </span>
           </div>
 
           <div
@@ -296,20 +429,23 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
                 width: "100%",
               }}
             />
-            <span className="mono" style={{ fontWeight: 700, color: "var(--solana-green)" }}>SOL</span>
+            <span className="mono" style={{ fontWeight: 800, color: "var(--solana-green)" }}>
+              SOL
+            </span>
           </div>
 
           {/* Quick SOL chips */}
           <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
-            {["0.1", "0.5", "1.0", "5.0"].map((amt) => (
+            {["0.1", "0.5", "1", "5"].map((amt) => (
               <button
                 key={amt}
                 onClick={() => setSolAmount(amt)}
                 style={{
                   flex: 1,
-                  padding: "4px",
+                  padding: "6px 4px",
                   borderRadius: "6px",
                   fontSize: "0.75rem",
+                  fontWeight: 600,
                   background: "var(--bg-surface)",
                   color: "var(--text-secondary)",
                   border: "1px solid var(--border-subtle)",
@@ -319,22 +455,23 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
               </button>
             ))}
             <button
-              onClick={() => setSolAmount((balance * 0.95).toFixed(2))}
+              onClick={() => setSolAmount(Math.max(0, Number(balance.toFixed(3))).toString())}
               style={{
                 flex: 1,
-                padding: "4px",
+                padding: "6px 4px",
                 borderRadius: "6px",
                 fontSize: "0.75rem",
-                background: "var(--bg-surface)",
-                color: "var(--solana-cyan)",
-                border: "1px solid var(--border-subtle)",
+                fontWeight: 700,
+                background: "rgba(20, 241, 149, 0.1)",
+                color: "var(--solana-green)",
+                border: "1px solid rgba(20, 241, 149, 0.3)",
               }}
             >
               MAX
             </button>
           </div>
 
-          {/* Output estimate */}
+          {/* Output estimate & Royalty breakdown */}
           <div
             style={{
               marginTop: "16px",
@@ -345,26 +482,43 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
               fontSize: "0.82rem",
               display: "flex",
               flexDirection: "column",
-              gap: "6px",
+              gap: "8px",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "var(--text-muted)" }}>You Receive Approx:</span>
-              <span className="mono" style={{ fontWeight: 700, color: "var(--solana-cyan)" }}>
+              <span className="mono" style={{ fontWeight: 700, color: "var(--solana-green)" }}>
                 {buyQuote.tokensOut ? `${(buyQuote.tokensOut / 1e6).toFixed(2)}M $${token.symbol}` : "0"}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "var(--text-muted)" }}>Price Impact:</span>
-              <span className="mono" style={{ color: buyQuote.priceImpact > 5 ? "var(--solana-red)" : "var(--solana-green)" }}>
+              <span className="mono" style={{ color: buyQuote.priceImpact > 5 ? "#ef4444" : "#14f195" }}>
                 {buyQuote.priceImpact.toFixed(2)}%
               </span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>Protocol Fee (1%):</span>
-              <span className="mono" style={{ color: "var(--text-muted)" }}>
-                {buyQuote.feeSol.toFixed(4)} SOL
-              </span>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "8px",
+                paddingTop: "6px",
+                borderTop: "1px dashed rgba(255, 255, 255, 0.08)",
+                fontSize: "0.72rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#14f195" }}>
+                <span>👑</span>
+                <span>
+                  <b>0.5%</b> Creator Vault
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#ff8c37" }}>
+                <span>🚀</span>
+                <span>
+                  <b>0.5%</b> Launcher Vault
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -373,7 +527,9 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "6px" }}>
             <span>You Sell (${token.symbol})</span>
-            <span>Balance: <b style={{ color: "var(--text-primary)" }}>{(userTokenBalance / 1e6).toFixed(2)}M</b></span>
+            <span>
+              Balance: <b style={{ color: "var(--text-primary)" }}>{(userTokenBalance / 1e6).toFixed(2)}M</b>
+            </span>
           </div>
 
           <div
@@ -403,15 +559,23 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
                 width: "100%",
               }}
             />
-            <span className="mono" style={{ fontWeight: 700, color: "var(--solana-purple)" }}>{token.symbol}</span>
+            <span className="mono" style={{ fontWeight: 700, color: "var(--solana-purple)" }}>
+              {token.symbol}
+            </span>
           </div>
 
           {/* Quick percentage chips */}
           <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
-            {[25, 50, 75, 100].map((pct) => (
+            {[10, 25, 50, 75, 100].map((pct) => (
               <button
                 key={pct}
-                onClick={() => setTokenAmount((userTokenBalance * (pct / 100)).toFixed(0))}
+                onClick={() => {
+                  if (pct === 100) {
+                    setTokenAmount(userTokenBalance.toString());
+                  } else {
+                    setTokenAmount(Math.floor(userTokenBalance * (pct / 100)).toString());
+                  }
+                }}
                 style={{
                   flex: 1,
                   padding: "4px",
@@ -444,20 +608,37 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "var(--text-muted)" }}>You Receive Approx:</span>
               <span className="mono" style={{ fontWeight: 700, color: "var(--solana-green)" }}>
-                {sellQuote.solOut ? `${sellQuote.solOut.toFixed(3)} SOL` : "0 SOL"}
+                {sellQuote.solOut ? `${(sellQuote.solOut || 0).toFixed(4)} SOL` : "0.0000 SOL"}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "var(--text-muted)" }}>Price Impact:</span>
-              <span className="mono" style={{ color: sellQuote.priceImpact > 5 ? "var(--solana-red)" : "var(--solana-green)" }}>
+              <span className="mono" style={{ color: sellQuote.priceImpact > 5 ? "#ef4444" : "#14f195" }}>
                 {sellQuote.priceImpact.toFixed(2)}%
               </span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)" }}>Protocol Fee (1%):</span>
-              <span className="mono" style={{ color: "var(--text-muted)" }}>
-                {sellQuote.feeSol.toFixed(4)} SOL
-              </span>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "8px",
+                paddingTop: "6px",
+                borderTop: "1px dashed rgba(255, 255, 255, 0.08)",
+                fontSize: "0.72rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#14f195" }}>
+                <span>👑</span>
+                <span>
+                  <b>0.5%</b> Creator Vault
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#ff8c37" }}>
+                <span>🚀</span>
+                <span>
+                  <b>0.5%</b> Launcher Vault
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -486,12 +667,28 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
       {/* Action Button */}
       <button
         onClick={handleSwap}
-        disabled={isSwapping}
+        disabled={isSwapping || (mode === "sell" && userTokenBalance <= 0)}
         className={mode === "buy" ? "btn-buy" : "btn-sell"}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          opacity: mode === "sell" && userTokenBalance <= 0 ? 0.5 : 1,
+          cursor: mode === "sell" && userTokenBalance <= 0 ? "not-allowed" : "pointer",
+        }}
       >
         <Zap size={18} />
-        <span>{isSwapping ? "Executing Trade..." : mode === "buy" ? `Buy $${token.symbol}` : `Sell $${token.symbol}`}</span>
+        <span>
+          {isSwapping
+            ? "Executing Trade..."
+            : mode === "buy"
+            ? `Buy $${token.symbol}`
+            : userTokenBalance <= 0
+            ? `0 $${token.symbol} In Wallet`
+            : `Sell $${token.symbol}`}
+        </span>
       </button>
     </div>
   );

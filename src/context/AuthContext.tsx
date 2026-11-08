@@ -1,66 +1,72 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { Keypair } from "@solana/web3.js";
 import { UserAccount } from "../types/auth";
 import { supabase } from "../services/supabase";
+
+export type WalletProviderName = "phantom" | "solflare" | "backpack" | "embedded";
 
 interface AuthContextType {
   currentUser: UserAccount | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  register: (data: {
-    username: string;
-    email: string;
-    password?: string;
-    displayName?: string;
-  }) => Promise<{ success: boolean; error?: string }>;
-  login: (credentials: {
-    usernameOrEmail: string;
-    password?: string;
-  }) => Promise<{ success: boolean; error?: string }>;
-  resetPassword: (usernameOrEmail: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  connectWalletAuth: (
+    providerName?: WalletProviderName,
+    preferredUsername?: string
+  ) => Promise<{ success: boolean; walletAddress?: string; error?: string }>;
+  loginWithWalletAddress: (walletAddress: string, preferredUsername?: string) => UserAccount;
   loginAsDemo: () => void;
   logout: () => void;
   updateProfile: (updates: Partial<UserAccount>) => void;
   updateUserBalance: (deltaOrNew: number, isDelta?: boolean) => void;
   updateUserTokens: (mint: string, deltaTokens: number) => void;
+  updateUserAssets: (params: {
+    solDelta?: number;
+    newSol?: number;
+    tokenMint?: string;
+    tokenDelta?: number;
+    setExactToken?: number;
+  }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ACCOUNTS_DB_KEY = "launchit_accounts_db";
+const WALLET_ACCOUNTS_DB_KEY = "launchit_wallet_accounts_db";
 const SESSION_KEY = "launchit_current_user";
+const EMBEDDED_KEYPAIR_KEY = "launchit_embedded_solana_pubkey";
 
-// Helper to generate a realistic looking Solana devnet address
-const generateDevnetSolanaAddress = (username: string): string => {
-  const chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = (hash << 5) - hash + username.charCodeAt(i);
-    hash |= 0;
+const getOrCreateEmbeddedWalletAddress = (): string => {
+  try {
+    const existing = localStorage.getItem(EMBEDDED_KEYPAIR_KEY);
+    if (existing && existing.length >= 32) return existing;
+    const kp = Keypair.generate();
+    const pubkey = kp.publicKey.toBase58();
+    localStorage.setItem(EMBEDDED_KEYPAIR_KEY, pubkey);
+    return pubkey;
+  } catch (_) {
+    return "";
   }
-  let addr = "Sol";
-  for (let i = 0; i < 40; i++) {
-    const idx = Math.abs((hash * (i + 13) + i * 37) % chars.length);
-    addr += chars[idx];
-  }
-  return addr.slice(0, 44);
 };
 
-const getStoredAccounts = (): Record<string, { user: UserAccount; passwordHash?: string }> => {
+const getStoredWalletAccounts = (): Record<string, UserAccount> => {
   try {
-    const raw = localStorage.getItem(ACCOUNTS_DB_KEY);
+    const raw = localStorage.getItem(WALLET_ACCOUNTS_DB_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) {
-    console.error("Failed to read accounts DB", e);
+    console.error("Failed to read wallet accounts DB", e);
   }
   return {};
 };
 
-const saveStoredAccounts = (accounts: Record<string, { user: UserAccount; passwordHash?: string }>) => {
+const saveStoredWalletAccounts = (accounts: Record<string, UserAccount>) => {
   try {
-    localStorage.setItem(ACCOUNTS_DB_KEY, JSON.stringify(accounts));
+    localStorage.setItem(WALLET_ACCOUNTS_DB_KEY, JSON.stringify(accounts));
   } catch (e) {
-    console.error("Failed to save accounts DB", e);
+    console.error("Failed to save wallet accounts DB", e);
   }
+};
+
+const formatShortWalletHandle = (walletAddress: string): string => {
+  return `${walletAddress.slice(0, 4)}_${walletAddress.slice(-4)}`.toLowerCase();
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -90,17 +96,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
+  // Auto-reconnect if browser wallet is already trusted & connected
+  useEffect(() => {
+    if (currentUser) return;
+    const win = window as any;
+    const provider = win?.phantom?.solana || win?.solana;
+    if (provider?.isPhantom && provider?.isConnected && provider?.publicKey) {
+      loginWithWalletAddress(provider.publicKey.toString());
+    }
+  }, []);
+
   const saveSession = (user: UserAccount | null) => {
     setCurrentUser(user);
     if (user) {
       try {
         localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-        // Also update stored accounts DB
-        const db = getStoredAccounts();
-        if (db[user.username.toLowerCase()]) {
-          db[user.username.toLowerCase()].user = user;
-          saveStoredAccounts(db);
-        }
+        const db = getStoredWalletAccounts();
+        db[user.solanaWallet] = user;
+        saveStoredWalletAccounts(db);
       } catch (_) {}
     } else {
       try {
@@ -109,258 +122,110 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (data: {
-    username: string;
-    email: string;
-    password?: string;
-    displayName?: string;
-  }): Promise<{ success: boolean; error?: string }> => {
-    setIsLoading(true);
-    try {
-      const cleanUsername = data.username.trim().replace(/^@/, "").toLowerCase();
-      if (!cleanUsername || cleanUsername.length < 3) {
-        return { success: false, error: "Username must be at least 3 characters." };
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
-        return { success: false, error: "Username can only contain letters, numbers, and underscores." };
-      }
+  const loginWithWalletAddress = (walletAddress: string, preferredUsername?: string): UserAccount => {
+    const db = getStoredWalletAccounts();
+    const existing = db[walletAddress];
 
-      const cleanEmail = data.email.trim().toLowerCase();
-      if (!cleanEmail || !cleanEmail.includes("@")) {
-        return { success: false, error: "Please enter a valid email address." };
-      }
+    const cleanPreferred = preferredUsername
+      ? preferredUsername.trim().replace(/^@/, "").replace(/[^a-zA-Z0-9_]/g, "").toLowerCase()
+      : "";
 
-      const db = getStoredAccounts();
-      if (db[cleanUsername]) {
-        return { success: false, error: `Username @${cleanUsername} is already taken. Please choose another.` };
-      }
-
-      // Check if email already used
-      const existingEmail = Object.values(db).find((a) => a.user.email.toLowerCase() === cleanEmail);
-      if (existingEmail) {
-        return { success: false, error: "An account with this email already exists. Please sign in." };
-      }
-
-      // Try Supabase auth in background (optional, non-blocking)
-      try {
-        if (data.password && data.password.length >= 6) {
-          await supabase.auth.signUp({
-            email: cleanEmail,
-            password: data.password,
-            options: {
-              data: {
-                username: cleanUsername,
-                display_name: data.displayName || cleanUsername,
-              },
-            },
-          });
-        }
-      } catch (sbErr) {
-        console.warn("Supabase auth notice:", sbErr);
-      }
-
-      const newUser: UserAccount = {
-        id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        username: cleanUsername,
-        email: cleanEmail,
-        displayName: data.displayName?.trim() || cleanUsername,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}&backgroundColor=111420`,
-        solanaWallet: generateDevnetSolanaAddress(cleanUsername),
-        balanceSol: 0.0,
-        userTokens: {},
-        createdAt: Date.now(),
-        reputationKarma: 100,
+    if (existing) {
+      const updatedUser: UserAccount = {
+        ...existing,
+        username: cleanPreferred || existing.username,
+        displayName: cleanPreferred || existing.displayName,
       };
-
-      db[cleanUsername] = {
-        user: newUser,
-        passwordHash: data.password || "default_pw",
-      };
-      saveStoredAccounts(db);
-
-      saveSession(newUser);
-      return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Failed to create account." };
-    } finally {
-      setIsLoading(false);
+      db[walletAddress] = updatedUser;
+      saveStoredWalletAccounts(db);
+      saveSession(updatedUser);
+      return updatedUser;
     }
+
+    const handle = cleanPreferred || formatShortWalletHandle(walletAddress);
+    const newUser: UserAccount = {
+      id: `wallet_${walletAddress}`,
+      username: handle,
+      email: `${walletAddress.slice(0, 8)}@solana.wallet`,
+      displayName: `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`,
+      avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${walletAddress}&backgroundColor=0e131d`,
+      solanaWallet: walletAddress,
+      balanceSol: 0.0,
+      userTokens: {},
+      createdAt: Date.now(),
+      reputationKarma: 100,
+    };
+
+    db[walletAddress] = newUser;
+    saveStoredWalletAccounts(db);
+    saveSession(newUser);
+    return newUser;
   };
 
-  const login = async (credentials: {
-    usernameOrEmail: string;
-    password?: string;
-  }): Promise<{ success: boolean; error?: string }> => {
+  const connectWalletAuth = async (
+    providerName: WalletProviderName = "phantom",
+    preferredUsername?: string
+  ): Promise<{ success: boolean; walletAddress?: string; error?: string }> => {
     setIsLoading(true);
     try {
-      const query = credentials.usernameOrEmail.trim().replace(/^@/, "").toLowerCase();
-      if (!query) {
-        return { success: false, error: "Please enter your username or email." };
+      const win = window as any;
+
+      if (providerName === "embedded") {
+        const embeddedAddr = getOrCreateEmbeddedWalletAddress();
+        loginWithWalletAddress(embeddedAddr, preferredUsername);
+        return { success: true, walletAddress: embeddedAddr };
       }
 
-      const inputPassword = credentials.password?.trim() || "";
+      let provider: any = null;
+      if (providerName === "phantom") {
+        provider = win?.phantom?.solana || (win?.solana?.isPhantom ? win.solana : null);
+      } else if (providerName === "solflare") {
+        provider = win?.solflare || (win?.solana?.isSolflare ? win.solana : null);
+      } else if (providerName === "backpack") {
+        provider = win?.backpack?.solana || win?.backpack || win?.solana;
+      }
 
-      const db = getStoredAccounts();
-      let matchKey = query;
-      let match = db[query];
+      // Fallback to any injected window.solana provider if specific one wasn't found
+      if (!provider && win?.solana) {
+        provider = win.solana;
+      }
 
-      if (!match) {
-        // Search by email
-        const foundEntry = Object.entries(db).find(([, a]) => a.user.email.toLowerCase() === query);
-        if (foundEntry) {
-          matchKey = foundEntry[0];
-          match = foundEntry[1];
+      if (provider && typeof provider.connect === "function") {
+        const resp = await provider.connect();
+        const pubkeyObj = resp?.publicKey || provider.publicKey;
+        if (pubkeyObj) {
+          const walletAddress = pubkeyObj.toString();
+          loginWithWalletAddress(walletAddress, preferredUsername);
+          return { success: true, walletAddress };
         }
       }
 
-      // If not found locally, try checking Supabase
-      if (!match) {
-        try {
-          const emailQuery = query.includes("@") ? query : `${query}@launchit.fun`;
-          const { data: sbData, error: sbErr } = await supabase.auth.signInWithPassword({
-            email: emailQuery,
-            password: inputPassword,
-          });
-          if (!sbErr && sbData.user) {
-            const restoredUser: UserAccount = {
-              id: sbData.user.id,
-              username: query.replace("@", ""),
-              email: sbData.user.email || emailQuery,
-              displayName: query,
-              avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${query}&backgroundColor=111420`,
-              solanaWallet: generateDevnetSolanaAddress(query),
-              balanceSol: 0.0,
-              userTokens: {},
-              createdAt: Date.now(),
-              reputationKarma: 100,
-            };
-            db[query] = { user: restoredUser, passwordHash: inputPassword };
-            saveStoredAccounts(db);
-            saveSession(restoredUser);
-            return { success: true };
-          }
-        } catch (_) {}
-
-        return { success: false, error: "Account not found. Please create an official account first." };
-      }
-
-      const storedPassword = match.passwordHash?.trim() || "";
-      let isPasswordValid = false;
-
-      // Check direct equality or trimmed equality
-      if (!storedPassword || storedPassword === "default_pw") {
-        // Self-heal: set stored password to what user entered
-        match.passwordHash = inputPassword;
-        db[matchKey] = match;
-        saveStoredAccounts(db);
-        isPasswordValid = true;
-      } else if (storedPassword === inputPassword) {
-        isPasswordValid = true;
-      } else {
-        // Try verifying with Supabase in case password was changed on backend
-        if (match.user.email && inputPassword) {
-          try {
-            const { data: sbData, error: sbErr } = await supabase.auth.signInWithPassword({
-              email: match.user.email,
-              password: inputPassword,
-            });
-            if (!sbErr && sbData.user) {
-              match.passwordHash = inputPassword;
-              db[matchKey] = match;
-              saveStoredAccounts(db);
-              isPasswordValid = true;
-            }
-          } catch (_) {}
-        }
-      }
-
-      if (!isPasswordValid) {
-        return {
-          success: false,
-          error: "Incorrect password. You can reset your password below if needed.",
-        };
-      }
-
-      saveSession(match.user);
-      return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Failed to sign in." };
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resetPassword = async (
-    usernameOrEmail: string,
-    newPassword: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    setIsLoading(true);
-    try {
-      const query = usernameOrEmail.trim().replace(/^@/, "").toLowerCase();
-      if (!query) return { success: false, error: "Please enter your username or email." };
-      const cleanPw = newPassword.trim();
-      if (!cleanPw || cleanPw.length < 4) {
-        return { success: false, error: "New password must be at least 4 characters." };
-      }
-
-      const db = getStoredAccounts();
-      let matchKey = query;
-      let match = db[query];
-      if (!match) {
-        const found = Object.entries(db).find(([, a]) => a.user.email.toLowerCase() === query);
-        if (found) {
-          matchKey = found[0];
-          match = found[1];
-        }
-      }
-
-      if (!match) {
-        return { success: false, error: "Account not found for that username or email." };
-      }
-
-      match.passwordHash = cleanPw;
-      db[matchKey] = match;
-      saveStoredAccounts(db);
-
-      // Attempt Supabase password update
-      try {
-        await supabase.auth.updateUser({ password: cleanPw });
-      } catch (_) {}
-
-      saveSession(match.user);
-      return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Failed to reset password." };
+      return {
+        success: false,
+        error: `No ${providerName.charAt(0).toUpperCase() + providerName.slice(1)} browser extension detected. Click "Instant Browser Wallet" below to generate an instant Solana wallet, or install Phantom/Solflare.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || "Wallet connection was cancelled.",
+      };
     } finally {
       setIsLoading(false);
     }
   };
 
   const loginAsDemo = () => {
-    const demoUser: UserAccount = {
-      id: "usr_demo_trader",
-      username: "solana_og",
-      email: "og@launchit.fun",
-      displayName: "Solana OG Trader",
-      avatarUrl: "https://api.dicebear.com/7.x/bottts/svg?seed=solana_og&backgroundColor=111420",
-      solanaWallet: "Sol9GenesisVauLtX82n7k4mW1pL3qB5c0uM4qD8jE1",
-      balanceSol: 25.0,
-      userTokens: {
-        "GenX7K9pQ5bWmR4v1k8Zs3nLe2YtF6aC0uM4qD8jE1oP": 45_000_000,
-      },
-      createdAt: Date.now() - 86400000 * 14,
-      reputationKarma: 1450,
-    };
-
-    const db = getStoredAccounts();
-    db["solana_og"] = { user: demoUser, passwordHash: "demo123" };
-    saveStoredAccounts(db);
-
-    saveSession(demoUser);
+    const embeddedAddr = getOrCreateEmbeddedWalletAddress();
+    loginWithWalletAddress(embeddedAddr);
   };
 
   const logout = () => {
     try {
+      const win = window as any;
+      const provider = win?.phantom?.solana || win?.solflare || win?.solana;
+      if (provider && typeof provider.disconnect === "function") {
+        provider.disconnect().catch(() => {});
+      }
       supabase.auth.signOut().catch(() => {});
     } catch (_) {}
     saveSession(null);
@@ -373,19 +238,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUserBalance = (deltaOrNew: number, isDelta = false) => {
-    if (!currentUser) return;
-    const newBal = isDelta ? Math.max(0, currentUser.balanceSol + deltaOrNew) : Math.max(0, deltaOrNew);
-    const updated = { ...currentUser, balanceSol: newBal };
-    saveSession(updated);
+    setCurrentUser((prev) => {
+      if (!prev) return null;
+      const newBal = isDelta ? Math.max(0, prev.balanceSol + deltaOrNew) : Math.max(0, deltaOrNew);
+      const updated = { ...prev, balanceSol: newBal };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+        const db = getStoredWalletAccounts();
+        db[updated.solanaWallet] = updated;
+        saveStoredWalletAccounts(db);
+      } catch (_) {}
+      return updated;
+    });
   };
 
   const updateUserTokens = (mint: string, deltaTokens: number) => {
-    if (!currentUser) return;
-    const currentTokens = { ...(currentUser.userTokens || {}) };
-    const currentAmt = currentTokens[mint] || 0;
-    currentTokens[mint] = Math.max(0, currentAmt + deltaTokens);
-    const updated = { ...currentUser, userTokens: currentTokens };
-    saveSession(updated);
+    setCurrentUser((prev) => {
+      if (!prev) return null;
+      const currentTokens = { ...(prev.userTokens || {}) };
+      const currentAmt = currentTokens[mint] || 0;
+      currentTokens[mint] = Math.max(0, currentAmt + deltaTokens);
+      const updated = { ...prev, userTokens: currentTokens };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+        const db = getStoredWalletAccounts();
+        db[updated.solanaWallet] = updated;
+        saveStoredWalletAccounts(db);
+      } catch (_) {}
+      return updated;
+    });
+  };
+
+  const updateUserAssets = (params: {
+    solDelta?: number;
+    newSol?: number;
+    tokenMint?: string;
+    tokenDelta?: number;
+    setExactToken?: number;
+  }) => {
+    setCurrentUser((prev) => {
+      if (!prev) return null;
+      let newBal = prev.balanceSol;
+      if (params.newSol !== undefined) {
+        newBal = Math.max(0, params.newSol);
+      } else if (params.solDelta !== undefined) {
+        newBal = Math.max(0, prev.balanceSol + params.solDelta);
+      }
+
+      const currentTokens = { ...(prev.userTokens || {}) };
+      if (params.tokenMint) {
+        if (params.setExactToken !== undefined) {
+          currentTokens[params.tokenMint] = Math.max(0, params.setExactToken);
+        } else if (params.tokenDelta !== undefined) {
+          const currentAmt = currentTokens[params.tokenMint] || 0;
+          currentTokens[params.tokenMint] = Math.max(0, currentAmt + params.tokenDelta);
+        }
+      }
+
+      const updated = { ...prev, balanceSol: newBal, userTokens: currentTokens };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+        const db = getStoredWalletAccounts();
+        db[updated.solanaWallet] = updated;
+        saveStoredWalletAccounts(db);
+      } catch (_) {}
+      return updated;
+    });
   };
 
   return (
@@ -394,14 +312,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         isAuthenticated: !!currentUser,
         isLoading,
-        register,
-        login,
-        resetPassword,
+        connectWalletAuth,
+        loginWithWalletAddress,
         loginAsDemo,
         logout,
         updateProfile,
         updateUserBalance,
         updateUserTokens,
+        updateUserAssets,
       }}
     >
       {children}

@@ -12,9 +12,9 @@ export interface TokenMetadata {
 export interface OnChainBondingCurve {
   mint: string;
   creator: string;
-  virtualSolReserves: bigint;
+  virtualOrbitReserves: bigint;
   virtualTokenReserves: bigint;
-  realSolReserves: bigint;
+  realOrbitReserves: bigint;
   realTokenReserves: bigint;
   tokenTotalSupply: bigint;
   complete: boolean;
@@ -26,8 +26,10 @@ export interface TradeRecord {
   mint: string;
   user: string;
   isBuy: boolean;
-  solAmount: number;
+  orbitAmount: number;
   tokenAmount: number;
+  feeTreasury: number;
+  feeBurned: number;
   timestamp: number;
   txHash: string;
 }
@@ -39,15 +41,15 @@ export interface LaunchpadToken {
   description: string;
   image: string;
   creator: string;
-  marketCapSol: number;
+  marketCapOrbit: number;
   marketCapUsd: number;
-  priceSol: number;
-  progressPercent: number;
-  realSolReserves: number;
+  priceOrbit: number;
+  progressPercent: number; // 0% to 100% (Achieved Orbit)
+  realOrbitReserves: number;
   realTokenReserves: number;
-  volume24hSol: number;
+  volume24hOrbit: number;
   repliesCount: number;
-  isGraduated: boolean;
+  isGraduated: boolean;    // "In Orbit"
   createdAt: number;
   socials: {
     twitter?: string;
@@ -55,3 +57,13 @@ export interface LaunchpadToken {
     website?: string;
   };
 }
+
+export interface OrbitBurnStats {
+  totalBurned: number;
+  recentBurns: Array<{
+    amount: number;
+    reason: string;
+    timestamp: number;
+  }>;
+}
+

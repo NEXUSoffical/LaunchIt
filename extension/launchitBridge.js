@@ -72,7 +72,8 @@ window.addEventListener("message", (event) => {
       chrome.runtime.sendMessage(
         {
           type: "OPEN_TIKTOK_LOGIN",
-          expectedHandle: event.data.expectedHandle
+          expectedHandle: event.data.expectedHandle,
+          forceSwitch: !!event.data.forceSwitch
         },
         (response) => {
           window.postMessage({ type: "LAUNCHIT_OPEN_LOGIN_RESULT", ...response }, "*");
@@ -85,6 +86,18 @@ window.addEventListener("message", (event) => {
 // Listen for push notifications from background (e.g. login completed, wrong account)
 try {
   chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "TIKTOK_AUTH_VERIFIED") {
+      window.postMessage(
+        {
+          type: "LAUNCHIT_TIKTOK_AUTH_VERIFIED",
+          detectedUsername: message.detectedUsername,
+          expectedUsername: message.expectedUsername,
+          isMatch: message.isMatch,
+          error: message.error
+        },
+        "*"
+      );
+    }
     if (message?.type === "TIKTOK_LOGIN_COMPLETED") {
       window.postMessage(
         {

@@ -9,6 +9,7 @@ import { ArrowLeft, Copy, ExternalLink, Globe, Twitter, Send } from "lucide-reac
 
 import { CreatorRoyaltyVault } from "./CreatorRoyaltyVault";
 import { CoinCommunityHub } from "./CoinCommunityHub";
+import { VideoEmbedCard } from "./VideoEmbedCard";
 
 interface TradingTerminalProps {
   token: Token;
@@ -16,19 +17,37 @@ interface TradingTerminalProps {
   onBack: () => void;
   onTradeExecuted: (trade: Trade, updatedToken: Token) => void;
   onUpdateToken?: (updatedToken: Token) => void;
+  onOpenExplorer?: (query?: string) => void;
 }
 
 export const TradingTerminal: React.FC<TradingTerminalProps> = ({
   token,
-  trades,
+  trades = [],
   onBack,
   onTradeExecuted,
   onUpdateToken,
+  onOpenExplorer,
 }) => {
-  const shortMint = `${token.mint.slice(0, 6)}...${token.mint.slice(-6)}`;
+  if (!token) return null;
+
+  const safeToken: Token = {
+    ...token,
+    name: token.name,
+    symbol: token.symbol,
+    image: token.image || "/logo.jpg",
+    priceSol: typeof token?.priceSol === "number" && !isNaN(token.priceSol) && token.priceSol > 0 && token.priceSol < 0.05
+      ? token.priceSol
+      : (token?.isGraduated ? 0.00042 : 0.00003),
+    realSolReserves: typeof token?.realSolReserves === "number" && !isNaN(token.realSolReserves) ? token.realSolReserves : 0,
+    realTokenReserves: typeof token?.realTokenReserves === "number" && !isNaN(token.realTokenReserves) ? token.realTokenReserves : 800_000_000,
+    progressPercent: typeof token?.progressPercent === "number" && !isNaN(token.progressPercent) ? token.progressPercent : 0,
+    socials: token?.socials || {},
+  };
+
+  const shortMint = safeToken.mint ? `${safeToken.mint.slice(0, 6)}...${safeToken.mint.slice(-6)}` : "";
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    if (text) navigator.clipboard.writeText(text);
   };
 
   const handleVaultUpdate = (updatedToken: Token) => {
@@ -65,45 +84,43 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <img
-            src={token.image}
-            alt={token.name}
+            src={safeToken.image}
+            alt={safeToken.name}
             style={{ width: "40px", height: "40px", borderRadius: "10px", objectFit: "cover" }}
           />
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h1 style={{ fontSize: "1.3rem", fontWeight: 800 }}>{token.name}</h1>
+              <h1 style={{ fontSize: "1.3rem", fontWeight: 800 }}>{safeToken.name}</h1>
               <span className="mono" style={{ fontSize: "1rem", fontWeight: 700, color: "var(--solana-cyan)" }}>
-                ${token.symbol}
+                ${safeToken.symbol}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.75rem", color: "var(--text-muted)" }}>
               <span>Mint:</span>
               <span className="mono" style={{ color: "var(--text-secondary)" }}>{shortMint}</span>
               <button
-                onClick={() => copyToClipboard(token.mint)}
+                onClick={() => copyToClipboard(safeToken.mint)}
                 title="Copy Mint Address"
                 style={{ background: "transparent", color: "var(--text-muted)", padding: "2px" }}
               >
                 <Copy size={12} />
               </button>
-              <a
-                href={`https://solscan.io/token/${token.mint}?cluster=devnet`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => onOpenExplorer ? onOpenExplorer(safeToken.mint) : window.open(`https://solscan.io/token/${encodeURIComponent(safeToken.mint)}`, "_blank")}
                 title="View on Solscan"
-                style={{ color: "var(--solana-cyan)", display: "inline-flex", alignItems: "center" }}
+                style={{ background: "transparent", border: "none", color: "var(--solana-green)", cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "2px" }}
               >
                 <ExternalLink size={12} />
-              </a>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Social Links */}
         <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
-          {token.socials.website && (
+          {safeToken.socials?.website && (
             <a
-              href={token.socials.website}
+              href={safeToken.socials.website}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary"
@@ -113,9 +130,9 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
               <span>Website</span>
             </a>
           )}
-          {token.socials.twitter && (
+          {safeToken.socials?.twitter && (
             <a
-              href={token.socials.twitter}
+              href={safeToken.socials.twitter}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary"
@@ -125,9 +142,9 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
               <span>Twitter</span>
             </a>
           )}
-          {token.socials.telegram && (
+          {safeToken.socials?.telegram && (
             <a
-              href={token.socials.telegram}
+              href={safeToken.socials.telegram}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary"
@@ -142,7 +159,7 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
 
       {/* Creator Royalty Escrow Vault */}
       <div style={{ marginBottom: "20px" }}>
-        <CreatorRoyaltyVault token={token} onUpdateToken={handleVaultUpdate} />
+        <CreatorRoyaltyVault token={safeToken} onUpdateToken={handleVaultUpdate} />
       </div>
 
       {/* Main Grid: Left = Chart + Trades, Right = Swap + Progress */}
@@ -156,16 +173,17 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
       >
         {/* Left Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <PriceChart token={token} />
-          <CoinCommunityHub token={token} />
-          <TradeHistory trades={trades.filter((t) => t.mint === token.mint)} tokenSymbol={token.symbol} />
+          <PriceChart token={safeToken} trades={trades.filter((t) => t.mint === safeToken.mint)} />
+          <CoinCommunityHub token={safeToken} />
+          <TradeHistory trades={trades.filter((t) => t.mint === safeToken.mint)} tokenSymbol={safeToken.symbol} />
         </div>
 
         {/* Right Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <SwapWidget token={token} onTradeExecuted={onTradeExecuted} />
-          <BondingCurveMeter token={token} />
-          <HolderDistribution token={token} />
+          <SwapWidget token={safeToken} onTradeExecuted={onTradeExecuted} />
+          <VideoEmbedCard token={safeToken} onUpdateToken={handleVaultUpdate} />
+          <BondingCurveMeter token={safeToken} />
+          <HolderDistribution token={safeToken} />
         </div>
       </div>
     </div>

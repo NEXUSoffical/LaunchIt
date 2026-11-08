@@ -1,9 +1,14 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use anchor_spl::token_2022::{self, MintTo, SetAuthority};
 use spl_token_2022::instruction::AuthorityType;
+use crate::curve::CurveMath;
 use crate::errors::LaunchpadError;
-use crate::state::{BondingCurve, LaunchpadConfig, BONDING_CURVE_SEED, CONFIG_SEED, CURVE_VAULT_SEED, TokenCreatedEvent};
+use crate::state::{
+    BondingCurve, OrbitLaunchConfig, OrbitBurnEvent, TokenCreatedEvent,
+    BONDING_CURVE_SEED, CONFIG_SEED, CURVE_VAULT_SEED,
+};
 
 pub const TOTAL_SUPPLY: u64 = 1_000_000_000_000_000; // 1 Billion tokens with 6 decimals
 
@@ -18,7 +23,21 @@ pub struct CreateToken<'info> {
         seeds = [CONFIG_SEED],
         bump = config.bump
     )]
-    pub config: Account<'info, LaunchpadConfig>,
+    pub config: Account<'info, OrbitLaunchConfig>,
+
+    /// CHECK: Validated against config.treasury
+    #[account(
+        mut,
+        constraint = treasury.key() == config.treasury @ LaunchpadError::Unauthorized
+    )]
+    pub treasury: AccountInfo<'info>,
+
+    /// CHECK: Validated against config.burn_address
+    #[account(
+        mut,
+        constraint = burn_address.key() == config.burn_address @ LaunchpadError::Unauthorized
+    )]
+    pub burn_address: AccountInfo<'info>,
 
     #[account(
         init,
@@ -65,6 +84,55 @@ pub fn handler(
     require!(symbol.len() <= 10, LaunchpadError::SymbolTooLong);
     require!(uri.len() <= 200, LaunchpadError::UriTooLong);
 
+    let config = &mut ctx.accounts.config;
+    let clock = Clock::get()?;
+
+    // 1. Process Anti-Spam Token Creation Fee in $ORBIT
+    if config.token_creation_fee_orbit > 0 {
+        let (burn_amt, treasury_amt) = CurveMath::calculate_fee_split(
+            config.token_creation_fee_orbit,
+            config.burn_split_basis_points,
+        )?;
+
+        if burn_amt > 0 {
+            transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.creator.to_account_info(),
+                        to: ctx.accounts.burn_address.to_account_info(),
+                    },
+                ),
+                burn_amt,
+            )?;
+
+            config.total_orbit_burned = config
+                .total_orbit_burned
+                .checked_add(burn_amt)
+                .ok_or(LaunchpadError::MathOverflow)?;
+
+            emit!(OrbitBurnEvent {
+                amount_burned: burn_amt,
+                total_burned_to_date: config.total_orbit_burned,
+                reason: format!("Token Creation Fee Burn: {}", symbol),
+                timestamp: clock.unix_timestamp,
+            });
+        }
+
+        if treasury_amt > 0 {
+            transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.creator.to_account_info(),
+                        to: ctx.accounts.treasury.to_account_info(),
+                    },
+                ),
+                treasury_amt,
+            )?;
+        }
+    }
+
     let mint_key = ctx.accounts.mint.key();
     let curve_bump = ctx.bumps.bonding_curve;
     let seeds = &[
@@ -74,7 +142,7 @@ pub fn handler(
     ];
     let signer_seeds = &[&seeds[..]];
 
-    // 1. Mint 100% of supply to the curve vault PDA
+    // 2. Mint 100% of supply to the curve vault PDA
     token_2022::mint_to(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -88,7 +156,7 @@ pub fn handler(
         TOTAL_SUPPLY,
     )?;
 
-    // 2. Permanently revoke mint authority (Zero rug potential - supply is immutable)
+    // 3. Permanently revoke mint authority (Zero rug potential - supply is immutable)
     token_2022::set_authority(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -102,16 +170,13 @@ pub fn handler(
         None,
     )?;
 
-    // 3. Initialize Bonding Curve state
-    let clock = Clock::get()?;
-    let config = &mut ctx.accounts.config;
+    // 4. Initialize Bonding Curve state
     let bonding_curve = &mut ctx.accounts.bonding_curve;
-
     bonding_curve.mint = mint_key;
     bonding_curve.creator = ctx.accounts.creator.key();
-    bonding_curve.virtual_sol_reserves = config.initial_virtual_sol;
+    bonding_curve.virtual_orbit_reserves = config.initial_virtual_orbit;
     bonding_curve.virtual_token_reserves = config.initial_virtual_tokens;
-    bonding_curve.real_sol_reserves = 0;
+    bonding_curve.real_orbit_reserves = 0;
     bonding_curve.real_token_reserves = config.real_token_target;
     bonding_curve.token_total_supply = TOTAL_SUPPLY;
     bonding_curve.complete = false;
@@ -132,6 +197,7 @@ pub fn handler(
         timestamp: clock.unix_timestamp,
     });
 
-    msg!("Token-2022 created and 1B supply locked in curve vault: {}", mint_key);
+    msg!("Orbit Token created on Launch It: {}", mint_key);
     Ok(())
 }
+

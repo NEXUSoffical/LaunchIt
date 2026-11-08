@@ -4,6 +4,12 @@ import { CoinThesis, ChatMessage } from "../types/auth";
 import { useAuth } from "../context/AuthContext";
 import { useWallet } from "../context/WalletContext";
 import {
+  fetchSharedCommunityForMint,
+  subscribeSharedDb,
+  syncUpsertThesis,
+  syncAddMessage,
+} from "../services/dbSync";
+import {
   FileText,
   MessageSquare,
   ThumbsUp,
@@ -27,58 +33,28 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
 
   const [activeTab, setActiveTab] = useState<"theses" | "chat">("theses");
 
-  // Theses state
+  // Theses state — strictly real user theses only
   const [theses, setTheses] = useState<CoinThesis[]>(() => {
     try {
       const stored = localStorage.getItem(`launchit_theses_${token.mint}`);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed: CoinThesis[] = JSON.parse(stored);
+        return parsed.filter((t) => !t.authorId?.startsWith("usr_seed_"));
+      }
     } catch (_) {}
-
-    // Default sample thesis to seed active community feeling
-    return [
-      {
-        id: `thesis-${token.mint}-1`,
-        mint: token.mint,
-        authorId: "usr_seed_1",
-        authorUsername: "crypto_prophet",
-        authorAvatar: "https://api.dicebear.com/7.x/bottts/svg?seed=crypto_prophet&backgroundColor=111420",
-        title: `Why $${token.symbol} will easily graduate at 85 SOL and hit Raydium`,
-        content: `Viral momentum is accelerating rapidly. The bonding curve constant product mechanics ensure high upside for early buyers. With 0% upfront token rent on Token-2022 and fair distribution, the organic meme velocity here is unmatched. Target is graduation within 48 hours.`,
-        sentiment: "bullish",
-        targetMarketCapSol: 150.0,
-        likes: ["usr_demo_trader"],
-        createdAt: Date.now() - 3600000 * 2,
-      },
-    ];
+    return [];
   });
 
-  // Chat state
+  // Chat state — strictly real user messages only
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const stored = localStorage.getItem(`launchit_chat_${token.mint}`);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed: ChatMessage[] = JSON.parse(stored);
+        return parsed.filter((m) => !m.authorId?.startsWith("usr_seed_"));
+      }
     } catch (_) {}
-
-    return [
-      {
-        id: `msg-${token.mint}-1`,
-        mint: token.mint,
-        authorId: "usr_seed_2",
-        authorUsername: "sol_alpha",
-        authorAvatar: "https://api.dicebear.com/7.x/bottts/svg?seed=sol_alpha&backgroundColor=111420",
-        text: `Just bought 2 SOL on the curve! Let's get $${token.symbol} graduated! 🚀`,
-        timestamp: Date.now() - 1000 * 60 * 18,
-      },
-      {
-        id: `msg-${token.mint}-2`,
-        mint: token.mint,
-        authorId: "usr_seed_3",
-        authorUsername: "diamond_hands_sol",
-        authorAvatar: "https://api.dicebear.com/7.x/bottts/svg?seed=diamond_hands_sol&backgroundColor=111420",
-        text: `TikTok video virality is kicking in. Floor is holding strong.`,
-        timestamp: Date.now() - 1000 * 60 * 5,
-      },
-    ];
+    return [];
   });
 
   // New thesis form state
@@ -92,7 +68,7 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
   const [chatInput, setChatInput] = useState("");
   const [shareToast, setShareToast] = useState<string | null>(null);
 
-  // Persistence
+  // Persistence + Shared Live Database Sync
   useEffect(() => {
     try {
       localStorage.setItem(`launchit_theses_${token.mint}`, JSON.stringify(theses));
@@ -105,6 +81,30 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
     } catch (_) {}
   }, [messages, token.mint]);
 
+  useEffect(() => {
+    let active = true;
+
+    fetchSharedCommunityForMint(token.mint, theses, messages).then((res) => {
+      if (!active) return;
+      if (Array.isArray(res.theses)) setTheses(res.theses);
+      if (Array.isArray(res.messages)) setMessages(res.messages);
+    });
+
+    const unsubscribe = subscribeSharedDb({
+      onThesesUpdate: (mint, updatedTheses) => {
+        if (mint === token.mint) setTheses(updatedTheses);
+      },
+      onMessagesUpdate: (mint, updatedMessages) => {
+        if (mint === token.mint) setMessages(updatedMessages);
+      },
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [token.mint]);
+
   const handleLikeThesis = (thesisId: string) => {
     if (!currentUser) return;
     setTheses((prev) =>
@@ -114,7 +114,9 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
           const newLikes = hasLiked
             ? t.likes.filter((id) => id !== currentUser.id)
             : [...t.likes, currentUser.id];
-          return { ...t, likes: newLikes };
+          const updated = { ...t, likes: newLikes };
+          syncUpsertThesis(updated);
+          return updated;
         }
         return t;
       })
@@ -148,6 +150,7 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
     };
 
     setTheses([newThesis, ...theses]);
+    syncUpsertThesis(newThesis);
     setThesisTitle("");
     setThesisContent("");
     setThesisTargetCap("");
@@ -169,6 +172,7 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
     };
 
     setMessages([...messages, newMsg]);
+    syncAddMessage(newMsg);
     setChatInput("");
   };
 
@@ -397,6 +401,11 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
 
           {/* List of theses */}
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {theses.length === 0 && (
+              <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                No theses published for ${token.symbol} yet.
+              </div>
+            )}
             {theses.map((t) => {
               const hasLiked = currentUser ? t.likes.includes(currentUser.id) : false;
 
@@ -539,6 +548,11 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
               gap: "12px",
             }}
           >
+            {messages.length === 0 && (
+              <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                No chat messages yet.
+              </div>
+            )}
             {messages.map((m) => (
               <div
                 key={m.id}

@@ -1,0 +1,70 @@
+{
+  "tokens": [
+    {
+      "id": "token-1794151261744",
+      "mint": "EGPYNSTwEondJVgR3o4nPjSqPvZwtMrctxaDcSgQdgt5",
+      "name": "worlds angriest guitarist ",
+      "symbol": "ANGRY ",
+      "description": "https://www.youtube.com/watch?v=Vms_6_TSQuc",
+      "image": "/logo.jpg",
+      "videoUrl": "https://www.youtube.com/watch?v=Vms_6_TSQuc",
+      "creator": "@BigKB",
+      "creatorHandle": "@BigKB",
+      "launcherHandle": "@BigKB",
+      "launcherWallet": "EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V",
+      "feeSplit": "split_50_50",
+      "unclaimedCreatorFeesSol": 0,
+      "unclaimedLauncherFeesSol": 0,
+      "claimedCreatorFeesSol": 0,
+      "claimedLauncherFeesSol": 0,
+      "marketCapSol": 30,
+      "marketCapUsd": 4500,
+      "priceSol": 3e-8,
+      "progressPercent": 0,
+      "realSolReserves": 0,
+      "realTokenReserves": 800000000,
+      "volume24hSol": 0,
+      "repliesCount": 0,
+      "isGraduated": false,
+      "createdAt": 1794151261744,
+      "socials": {
+        "website": "https://www.youtube.com/watch?v=Vms_6_TSQuc"
+      }
+    },
+    {
+      "id": "token-1794148993377",
+      "mint": "5hrq6qLMWnirEiXq8gfNGowsYcFnR6fWbAxWGuD6AMhj",
+      "name": "launch test ",
+      "symbol": "TEST ",
+      "description": "testing ",
+      "image": "/logo.jpg",
+      "creator": "@BigKB",
+      "creatorHandle": "@BigKB",
+      "launcherHandle": "@BigKB",
+      "launcherWallet": "EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V",
+      "feeSplit": "split_50_50",
+      "unclaimedCreatorFeesSol": 0,
+      "unclaimedLauncherFeesSol": 0,
+      "claimedCreatorFeesSol": 0,
+      "claimedLauncherFeesSol": 0,
+      "marketCapSol": 30,
+      "marketCapUsd": 4500,
+      "priceSol": 3e-8,
+      "progressPercent": 0,
+      "realSolReserves": 0,
+      "realTokenReserves": 800000000,
+      "volume24hSol": 0,
+      "repliesCount": 0,
+      "isGraduated": false,
+      "createdAt": 1794148993377,
+      "socials": {
+        "website": "https://www.youtube.com/watch?v=Vms_6_TSQuc"
+      },
+      "videoUrl": "https://www.youtube.com/watch?v=Vms_6_TSQuc"
+    }
+  ],
+  "trades": [],
+  "theses": {},
+  "messages": {},
+  "updatedAt": 1794151261773
+}

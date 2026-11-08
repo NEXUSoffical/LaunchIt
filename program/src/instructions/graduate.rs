@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::errors::LaunchpadError;
 use crate::state::{
-    BondingCurve, GraduationEvent, LaunchpadConfig,
+    BondingCurve, AchievedOrbitEvent, OrbitLaunchConfig,
     BONDING_CURVE_SEED, CONFIG_SEED, CURVE_VAULT_SEED,
 };
 
@@ -15,7 +15,7 @@ pub struct Graduate<'info> {
         seeds = [CONFIG_SEED],
         bump = config.bump
     )]
-    pub config: Account<'info, LaunchpadConfig>,
+    pub config: Account<'info, OrbitLaunchConfig>,
 
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -36,7 +36,7 @@ pub struct Graduate<'info> {
     )]
     pub curve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// Raydium / Meteora Liquidity Destination or Escrow Authority
+    /// Orbit Native AMM Liquidity Destination / Burn Address
     /// CHECK: Validated by config authority or crank execution
     #[account(mut)]
     pub migration_recipient: AccountInfo<'info>,
@@ -51,25 +51,26 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
 
     // Must have reached graduation target
     require!(
-        bonding_curve.complete || bonding_curve.real_sol_reserves >= config.migration_sol_target,
+        bonding_curve.complete || bonding_curve.real_orbit_reserves >= config.orbit_graduation_target,
         LaunchpadError::BondingCurveNotGraduated
     );
 
     bonding_curve.complete = true;
     let clock = Clock::get()?;
 
-    emit!(GraduationEvent {
+    emit!(AchievedOrbitEvent {
         mint: ctx.accounts.mint.key(),
-        total_sol_raised: bonding_curve.real_sol_reserves,
+        total_orbit_raised: bonding_curve.real_orbit_reserves,
         remaining_tokens: bonding_curve.real_token_reserves,
         timestamp: clock.unix_timestamp,
     });
 
     msg!(
-        "Graduation confirmed for {}. Raised {} lamports. Seeding DEX liquidity.",
+        "🪐 ACHIEVED ORBIT! Token {} completed graduation with {} $ORBIT raised. Seeding permanent Orbit AMM liquidity.",
         ctx.accounts.mint.key(),
-        bonding_curve.real_sol_reserves
+        bonding_curve.real_orbit_reserves
     );
 
     Ok(())
 }
+

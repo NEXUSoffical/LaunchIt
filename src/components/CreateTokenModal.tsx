@@ -2,7 +2,9 @@ import React, { useState } from "react";
 import { Token } from "../types";
 import { useWallet } from "../context/WalletContext";
 import { useAuth } from "../context/AuthContext";
-import { X, Sparkles, ShieldCheck, Zap, Video, Link2, Share2, CheckCircle2 } from "lucide-react";
+import { ClientCurve } from "../utils/curve";
+import { deployTokenOnChain } from "../services/solanaOnChain";
+import { X, Zap, Video, Link2, Share2, CheckCircle2 } from "lucide-react";
 
 interface CreateTokenModalProps {
   isOpen: boolean;
@@ -15,7 +17,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
   onClose,
   onTokenCreated,
 }) => {
-  const { balance, deductSol, updateTokenBalance } = useWallet();
+  const { balance, network, publicKey, deductSol, updateTokenBalance, notifyTx } = useWallet();
   const { currentUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"social" | "manual">("social");
@@ -24,6 +26,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
   const [videoUrl, setVideoUrl] = useState("");
   const [detectedPlatform, setDetectedPlatform] = useState<"tiktok" | "instagram" | "x" | null>(null);
   const [previewThumbnail, setPreviewThumbnail] = useState<string | null>(null);
+  const [scrapedCreator, setScrapedCreator] = useState<string | null>(null);
 
   // Common coin details
   const [name, setName] = useState("");
@@ -38,26 +41,40 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleVideoUrlChange = (url: string) => {
+  const handleVideoUrlChange = async (url: string) => {
     setVideoUrl(url);
+    setWebsite(url);
+
+    // Extract @username from URL if present
+    const handleMatch = url.match(/@([a-zA-Z0-9_.-]+)/);
+    const extractedHandle = handleMatch ? `@${handleMatch[1]}` : null;
+    if (extractedHandle) {
+      setScrapedCreator(extractedHandle);
+    }
+
     if (url.includes("tiktok.com")) {
       setDetectedPlatform("tiktok");
-      setName("Viral TikTok Coin");
-      setSymbol("TIKTOK");
-      setDescription(`Launched directly from TikTok video: ${url}`);
-      setPreviewThumbnail("https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80");
+      try {
+        const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.title) {
+            const cleanTitle = data.title.split("#")[0].trim().slice(0, 32) || data.author_name || "";
+            if (cleanTitle) setName(cleanTitle);
+            setDescription(data.title);
+          }
+          if (data.author_name && !extractedHandle) {
+            setScrapedCreator(`@${data.author_name}`);
+          }
+          if (data.thumbnail_url) {
+            setPreviewThumbnail(data.thumbnail_url);
+          }
+        }
+      } catch (_) {}
     } else if (url.includes("instagram.com")) {
       setDetectedPlatform("instagram");
-      setName("Viral Instagram Reel");
-      setSymbol("REEL");
-      setDescription(`Launched directly from Instagram Reel: ${url}`);
-      setPreviewThumbnail("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=80");
     } else if (url.includes("x.com") || url.includes("twitter.com")) {
       setDetectedPlatform("x");
-      setName("Viral X Post");
-      setSymbol("XMEME");
-      setDescription(`Launched directly from X (Twitter): ${url}`);
-      setPreviewThumbnail("https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=300&auto=format&fit=crop&q=80");
     } else {
       setDetectedPlatform(null);
     }
@@ -67,61 +84,89 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
     e.preventDefault();
     if (!name || !symbol) return;
 
-    setIsSubmitting(true);
-
     const initialBuy = parseFloat(initialBuySol) || 0;
-    if (initialBuy > 0) {
-      deductSol(initialBuy);
+    if (initialBuy > balance) {
+      alert(`Insufficient SOL balance! You have ${balance.toFixed(4)} SOL.`);
+      return;
     }
 
-    // Generate simulated mint address
-    const fakeMint = `Gen${Math.random().toString(36).substring(2, 8).toUpperCase()}${Math.random().toString(36).substring(2, 10)}Xv7`;
+    setIsSubmitting(true);
+    try {
+      const finalImg = previewThumbnail || imageUrl || "/logo.jpg";
 
-    // Calculate initial curve states
-    const realSol = initialBuy * 0.99;
-    const initialTokensBought = initialBuy > 0 ? initialBuy * 10_000_000 : 0;
-    const realTokens = 800_000_000 - initialTokensBought;
+      // Sign & broadcast real on-chain transaction via Phantom / Solflare
+      const { mintAddress: mintAddr, txSignature } = await deployTokenOnChain({
+        network,
+        creatorWallet: publicKey || currentUser?.solanaWallet || "",
+        name,
+        symbol: symbol.toUpperCase(),
+        uri: finalImg,
+        initialBuySol: initialBuy,
+      });
 
-    if (initialBuy > 0) {
-      updateTokenBalance(fakeMint, initialTokensBought);
+      if (initialBuy > 0) {
+        deductSol(initialBuy);
+      }
+
+      const realSol = initialBuy * 0.99;
+      const initialTokensBought =
+        initialBuy > 0
+          ? Math.round(ClientCurve.calculateBuyQuote(initialBuy, 0, 800_000_000).tokensOut || 0)
+          : 0;
+      const realTokens = 800_000_000 - initialTokensBought;
+
+      if (initialTokensBought > 0) {
+        updateTokenBalance(mintAddr, initialTokensBought);
+      }
+
+      const creatorIdentity =
+        scrapedCreator || (currentUser ? `@${currentUser.username}` : "");
+
+      const newToken: Token = {
+        id: `token-${Date.now()}`,
+        mint: mintAddr,
+        name,
+        symbol: symbol.toUpperCase(),
+        description: description || "",
+        image: finalImg,
+        videoUrl: videoUrl.trim() || undefined,
+        creator: creatorIdentity,
+        creatorHandle: creatorIdentity,
+        launcherHandle: currentUser ? `@${currentUser.username}` : creatorIdentity,
+        launcherWallet: publicKey || currentUser?.solanaWallet || null,
+        feeSplit: "split_50_50",
+        unclaimedCreatorFeesSol: initialBuy * 0.005,
+        unclaimedLauncherFeesSol: initialBuy * 0.005,
+        claimedCreatorFeesSol: 0,
+        claimedLauncherFeesSol: 0,
+        marketCapSol: 30.0 + realSol,
+        marketCapUsd: (30.0 + realSol) * 150,
+        priceSol: 0.00000003,
+        progressPercent: (realSol / 85.0) * 100,
+        realSolReserves: realSol,
+        realTokenReserves: realTokens,
+        volume24hSol: initialBuy,
+        repliesCount: 0,
+        isGraduated: false,
+        createdAt: Date.now(),
+        socials: {
+          twitter: twitter || undefined,
+          telegram: telegram || undefined,
+          website: website || videoUrl || undefined,
+        },
+      };
+
+      onTokenCreated(newToken);
+      notifyTx(
+        txSignature,
+        `TOKEN DEPLOYED ON-CHAIN: $${symbol.toUpperCase()} (${mintAddr.slice(0, 6)}...${mintAddr.slice(-4)})`
+      );
+      onClose();
+    } catch (err: any) {
+      alert(err?.message || "Transaction rejected or failed in wallet.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const finalImg =
-      previewThumbnail ||
-      imageUrl ||
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80";
-
-    const newToken: Token = {
-      id: `token-${Date.now()}`,
-      mint: fakeMint,
-      name,
-      symbol: symbol.toUpperCase(),
-      description: description || "Launched on LaunchIt.",
-      image: finalImg,
-      creator: currentUser ? `@${currentUser.username}` : "You (Sol9...8jE1)",
-      creatorHandle: currentUser ? `@${currentUser.username}` : undefined,
-      launcherHandle: currentUser ? `@${currentUser.username}` : undefined,
-      launcherWallet: currentUser?.solanaWallet || null,
-      marketCapSol: 30.0 + realSol,
-      marketCapUsd: (30.0 + realSol) * 150,
-      priceSol: 0.00000003,
-      progressPercent: (realSol / 85.0) * 100,
-      realSolReserves: realSol,
-      realTokenReserves: realTokens,
-      volume24hSol: initialBuy,
-      repliesCount: 0,
-      isGraduated: false,
-      createdAt: Date.now(),
-      socials: {
-        twitter: twitter || undefined,
-        telegram: telegram || undefined,
-        website: website || undefined,
-      },
-    };
-
-    onTokenCreated(newToken);
-    setIsSubmitting(false);
-    onClose();
   };
 
   return (
@@ -281,7 +326,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
                     Detected: {detectedPlatform.toUpperCase()}
                   </span>
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                    Auto-filled name, symbol, and thumbnail!
+                    Auto-filled metadata {scrapedCreator ? `for creator ${scrapedCreator}` : ""}!
                   </span>
                 </div>
               )}
@@ -370,48 +415,90 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
             />
           </div>
 
-          {activeTab === "manual" && (
-            <div>
-              <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "4px" }}>
-                Custom Image URL
-              </label>
+          <div style={{ display: " flex", flexDirection: "column", gap: "8px" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              Token Image (Upload File or Image URL)
+            </label>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      if (typeof reader.result === "string") {
+                        setImageUrl(reader.result);
+                        setPreviewThumbnail(reader.result);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-secondary)",
+                }}
+              />
               <input
                 type="url"
-                placeholder="https://..."
-                value={imageUrl}
+                placeholder="Or paste image URL..."
+                value={imageUrl.startsWith("data:") ? "" : imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 style={{
-                  width: "100%",
+                  flex: 1,
                   background: "var(--bg-surface)",
                   border: "1px solid var(--border-subtle)",
                   borderRadius: "var(--radius-sm)",
-                  padding: "10px 12px",
+                  padding: "8px 12px",
                   color: "#ffffff",
                   fontSize: "0.85rem",
                 }}
               />
             </div>
-          )}
+          </div>
 
-          {/* Optional Creator Buy */}
+          {/* Token-2022 Creation Fee & Optional Initial Buy */}
           <div
             style={{
               padding: "12px",
               background: "var(--bg-surface)",
               borderRadius: "var(--radius-md)",
               border: "1px solid var(--border-subtle)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "6px" }}>
-              <span style={{ fontWeight: 600 }}>Initial Creator Buy (Optional)</span>
-              <span style={{ color: "var(--text-muted)" }}>Balance: {balance.toFixed(2)} SOL</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 10px",
+                background: "rgba(20, 241, 149, 0.08)",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid rgba(20, 241, 149, 0.2)",
+                fontSize: "0.75rem",
+              }}
+            >
+              <span style={{ color: "var(--solana-green)", display: "flex", alignItems: "center", gap: "5px" }}>
+                <span>⚡</span> Token-2022 Rent: <b>0.002 SOL</b>
+              </span>
+              <span style={{ color: "var(--text-muted)" }}>50/50 Creator & Launcher Royalty Split</span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
+              <span style={{ fontWeight: 600 }}>Initial Dev / Sniper Buy (Optional)</span>
+              <span style={{ color: "var(--text-muted)" }}>Balance: {balance.toFixed(3)} SOL</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <input
                 type="number"
                 step="0.1"
                 min="0"
-                placeholder="0.0 SOL (Buy tokens in same launch block)"
+                placeholder="0.0 SOL (Buy tokens in the same launch block)"
                 value={initialBuySol}
                 onChange={(e) => setInitialBuySol(e.target.value)}
                 className="mono"
@@ -449,7 +536,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
             }}
           >
             <Zap size={18} />
-            <span>{isSubmitting ? "Launching on Solana..." : "Launch Coin Now 🐆"}</span>
+            <span>{isSubmitting ? "Minting on Solana..." : "Launch Coin on Solana 🚀"}</span>
           </button>
         </form>
       </div>

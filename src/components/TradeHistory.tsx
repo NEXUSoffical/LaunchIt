@@ -84,10 +84,10 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({
                     </td>
                     <td style={{ padding: "10px 6px", textAlign: "right" }}>
                       <a
-                        href={`https://solscan.io/tx/${trade.txHash}?cluster=devnet`}
+                        href={`https://solscan.io/tx/${trade.txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "2px" }}
+                        style={{ color: "var(--solana-green)", display: "inline-flex", alignItems: "center", gap: "2px" }}
                       >
                         <span className="mono" style={{ fontSize: "0.75rem" }}>{trade.txHash.slice(0, 6)}</span>
                         <ExternalLink size={12} />

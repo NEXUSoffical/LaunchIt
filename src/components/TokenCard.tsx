@@ -23,7 +23,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-4px)";
-        e.currentTarget.style.borderColor = "rgba(153, 69, 255, 0.4)";
+        e.currentTarget.style.borderColor = "rgba(255, 96, 0, 0.45)";
         e.currentTarget.style.boxShadow = "0 12px 28px rgba(0, 0, 0, 0.6)";
       }}
       onMouseLeave={(e) => {
@@ -54,11 +54,11 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
             {token.isGraduated ? (
               <span className="badge badge-green">
                 <CheckCircle2 size={12} />
-                Raydium
+                Graduated 🎓
               </span>
             ) : (
-              <span className="badge badge-purple">
-                {token.progressPercent.toFixed(0)}% Curve
+              <span className="badge badge-orbit">
+                {token.progressPercent.toFixed(0)}% Bonded
               </span>
             )}
           </div>
@@ -98,7 +98,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
         {token.description}
       </p>
 
-      {/* Market Cap & Price */}
+      {/* Market Cap & Price in SOL */}
       <div
         style={{
           display: "flex",
@@ -113,7 +113,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
         <div>
           <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>Market Cap</div>
           <div className="mono" style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)" }}>
-            {token.marketCapSol.toFixed(1)} SOL
+            {(token.marketCapSol || 30).toFixed(1)} SOL
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -128,8 +128,8 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "4px" }}>
           <span style={{ color: "var(--text-muted)" }}>Bonding Curve</span>
-          <span className="mono" style={{ color: "var(--solana-green)", fontWeight: 600 }}>
-            {token.progressPercent.toFixed(1)}%
+          <span className="mono" style={{ color: token.isGraduated ? "var(--solana-green)" : "#ff8c37", fontWeight: 700 }}>
+            {token.isGraduated ? "RAYDIUM DEX 🎓" : `${token.progressPercent.toFixed(1)}%`}
           </span>
         </div>
         <div
@@ -145,9 +145,10 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
               width: `${token.progressPercent}%`,
               height: "100%",
               background: token.isGraduated
-                ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
-                : "linear-gradient(90deg, #9945ff 0%, #14f195 100%)",
+                ? "linear-gradient(90deg, #14f195 0%, #00f0ff 100%)"
+                : "linear-gradient(90deg, #9945ff 0%, #ff6000 60%, #ff8c37 100%)",
               borderRadius: "3px",
+              boxShadow: token.isGraduated ? "0 0 8px rgba(20, 241, 149, 0.6)" : "0 0 6px rgba(255, 96, 0, 0.4)",
             }}
           />
         </div>
@@ -165,8 +166,8 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
         }}
       >
         <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <TrendingUp size={12} color="var(--solana-cyan)" />
-          {token.volume24hSol.toFixed(1)} SOL Vol
+          <TrendingUp size={12} color="#ff8c37" />
+          {(token.volume24hSol || 0).toFixed(1)} SOL Vol
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <MessageSquare size={12} />

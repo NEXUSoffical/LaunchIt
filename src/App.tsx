@@ -8,7 +8,23 @@ import { TradingTerminal } from "./components/TradingTerminal";
 import { CreateTokenModal } from "./components/CreateTokenModal";
 import { DeployGuideModal } from "./components/DeployGuideModal";
 import { LandingHomePage } from "./components/LandingHomePage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAuth } from "./context/AuthContext";
+import {
+  fetchSharedDatabase,
+  subscribeSharedDb,
+  syncUpsertToken,
+  syncAddTrade,
+} from "./services/dbSync";
+
+const safeDecode = (str: string | null | undefined): string => {
+  if (!str) return "";
+  try {
+    return decodeURIComponent(str);
+  } catch (_) {
+    return str;
+  }
+};
 
 const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token | null } => {
   let stored: Token[] = [];
@@ -16,11 +32,41 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
     const saved = localStorage.getItem("launchit_tokens_db");
     if (saved) {
       const parsed: Token[] = JSON.parse(saved);
-      stored = parsed.filter(
-        (t) =>
-          !["genesis-ai", "sol-cyber-pepe", "quantum-sol", "neon-samurai"].includes(t.id) &&
-          !["GENESIS", "CPEPE", "QSOL", "SAMURAI"].includes(t.symbol)
-      );
+      const MOCK_IDS = new Set([
+        "genesis-ai",
+        "sol-cyber-pepe",
+        "quantum-sol",
+        "neon-samurai",
+        "orbit-alpha",
+        "solar-doge",
+        "quantum-ape",
+        "chill-guy-tiktok",
+        "moo-deng-viral",
+        "sigma-cat-reel",
+      ]);
+      const MOCK_SYMBOLS = new Set([
+        "GENESIS",
+        "CPEPE",
+        "QSOL",
+        "SAMURAI",
+        "ORBCAT",
+        "SDOGE",
+        "QAPE",
+        "CHILL",
+        "MOODENG",
+        "LOCKEDIN",
+      ]);
+      stored = parsed
+        .filter((t) => !MOCK_IDS.has(t.id) && !MOCK_SYMBOLS.has(t.symbol) && !t.image?.includes("images.unsplash.com"))
+        .map((t) => ({
+          ...t,
+          priceSol:
+            typeof t.priceSol === "number" && !isNaN(t.priceSol) && t.priceSol > 0 && t.priceSol < 0.05
+              ? t.priceSol
+              : t.isGraduated
+              ? 0.00042
+              : 0.00003,
+        }));
     }
   } catch (e) {
     console.error("Failed to parse saved tokens", e);
@@ -48,29 +94,30 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
       const createdCoin: Token = {
         id: `tiktok-${Date.now()}`,
         mint: newMint,
-        name: decodeURIComponent(newName),
-        symbol: decodeURIComponent(newSymbol).toUpperCase().replace("$", ""),
-        description: videoUrl ? `Launched directly from TikTok: ${decodeURIComponent(videoUrl)}` : "Launched directly on LaunchIt via 1-click in-app.",
-        image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
+        name: safeDecode(newName),
+        symbol: safeDecode(newSymbol).toUpperCase().replace("$", ""),
+        description: videoUrl ? `Launched from TikTok: ${safeDecode(videoUrl)}` : "",
+        image: params.get("image") ? safeDecode(params.get("image")) : "/logo.jpg",
         creator: (() => {
           const raw = params.get("creator");
-          if (raw) return decodeURIComponent(raw);
+          if (raw) return safeDecode(raw);
           if (videoUrl) {
-            const m = decodeURIComponent(videoUrl).match(/@([^/?#]+)/);
+            const m = safeDecode(videoUrl).match(/@([^/?#]+)/);
             if (m) return `@${m[1]}`;
           }
-          return "@tiktok_creator";
+          return "";
         })(),
         creatorHandle: (() => {
           const raw = params.get("creator");
-          if (raw) return decodeURIComponent(raw);
+          if (raw) return safeDecode(raw);
           if (videoUrl) {
-            const m = decodeURIComponent(videoUrl).match(/@([^/?#]+)/);
+            const m = safeDecode(videoUrl).match(/@([^/?#]+)/);
             if (m) return `@${m[1]}`;
           }
-          return "@tiktok_creator";
+          return undefined;
         })(),
-        launcherWallet: params.get("launcher_wallet") ? decodeURIComponent(params.get("launcher_wallet")!) : null,
+        launcherHandle: params.get("launcher_handle") ? safeDecode(params.get("launcher_handle")!).toLowerCase() : undefined,
+        launcherWallet: params.get("launcher_wallet") ? safeDecode(params.get("launcher_wallet")!) : null,
         feeSplit: (params.get("fee_split") as any) || "split_50_50",
         unclaimedCreatorFeesSol: 0,
         unclaimedLauncherFeesSol: 0,
@@ -117,17 +164,90 @@ const parsedState = parseInitialState();
 export const App: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [tokens, setTokens] = useState<Token[]>(parsedState.initialTokens);
-  const [trades, setTrades] = useState<Trade[]>(INITIAL_TRADES);
+  const [trades, setTrades] = useState<Trade[]>(() => {
+    try {
+      const saved = localStorage.getItem("launchit_trades_db");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return INITIAL_TRADES;
+  });
   const [selectedToken, setSelectedToken] = useState<Token | null>(parsedState.initialSelected);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
-  // Sync with localStorage whenever tokens change
+  // Sync with localStorage whenever tokens or trades change
   useEffect(() => {
     try {
       localStorage.setItem("launchit_tokens_db", JSON.stringify(tokens));
     } catch (_) {}
   }, [tokens]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("launchit_trades_db", JSON.stringify(trades));
+    } catch (_) {}
+  }, [trades]);
+
+  // Initial load + real-time subscription to Shared Live Database (API + Supabase Realtime)
+  useEffect(() => {
+    let active = true;
+
+    const loadShared = async () => {
+      const snapshot = await fetchSharedDatabase(tokens, trades);
+      if (!active) return;
+      if (Array.isArray(snapshot.tokens)) {
+        setTokens(snapshot.tokens);
+        setSelectedToken((prev) => {
+          if (!prev) return null;
+          return snapshot.tokens.find((t) => t.mint === prev.mint) || prev;
+        });
+      }
+      if (Array.isArray(snapshot.trades)) {
+        setTrades(snapshot.trades);
+      }
+    };
+
+    loadShared();
+
+    const unsubscribe = subscribeSharedDb({
+      onTokensUpdate: (updatedTokens) => {
+        setTokens(updatedTokens);
+        setSelectedToken((prev) => {
+          if (!prev) return null;
+          return updatedTokens.find((t) => t.mint === prev.mint) || prev;
+        });
+      },
+      onTradesUpdate: (updatedTrades) => {
+        setTrades(updatedTrades);
+      },
+    });
+
+    // Periodic background sync every 4s for cross-device consistency
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/launchit-db");
+        if (res.ok && active) {
+          const data = await res.json();
+          if (Array.isArray(data.tokens)) {
+            setTokens(data.tokens);
+            setSelectedToken((prev) => {
+              if (!prev) return null;
+              return data.tokens.find((t: Token) => t.mint === prev.mint) || prev;
+            });
+          }
+          if (Array.isArray(data.trades)) {
+            setTrades(data.trades);
+          }
+        }
+      } catch (_) {}
+    }, 4000);
+
+    return () => {
+      active = false;
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, []);
 
   // Listen for storage events (e.g. from other tabs) and custom extension events
   useEffect(() => {
@@ -145,6 +265,7 @@ export const App: React.FC = () => {
         const newToken: Token = e.detail;
         setTokens((prev) => [newToken, ...prev.filter((t) => t.mint !== newToken.mint)]);
         setSelectedToken(newToken);
+        syncUpsertToken(newToken);
       }
     };
 
@@ -166,8 +287,9 @@ export const App: React.FC = () => {
   };
 
   const handleTokenCreated = (newToken: Token) => {
-    setTokens((prev) => [newToken, ...prev]);
+    setTokens((prev) => [newToken, ...prev.filter((t) => t.mint !== newToken.mint)]);
     setSelectedToken(newToken);
+    syncUpsertToken(newToken);
   };
 
   const handleTokenUpdated = (updatedToken: Token) => {
@@ -175,6 +297,7 @@ export const App: React.FC = () => {
       prev.map((t) => (t.mint === updatedToken.mint ? updatedToken : t))
     );
     setSelectedToken(updatedToken);
+    syncUpsertToken(updatedToken);
   };
 
   const handleTradeExecuted = (newTrade: Trade, updatedToken: Token) => {
@@ -185,6 +308,7 @@ export const App: React.FC = () => {
     if (selectedToken && selectedToken.mint === updatedToken.mint) {
       setSelectedToken(updatedToken);
     }
+    syncAddTrade(newTrade, updatedToken);
   };
 
   if (!isAuthenticated) {
@@ -197,30 +321,32 @@ export const App: React.FC = () => {
         onOpenCreate={() => setIsCreateOpen(true)}
         onOpenGuide={() => setIsGuideOpen(true)}
         onHomeClick={() => setSelectedToken(null)}
+        onOpenExplorer={(query) => {
+          window.open(`https://solscan.io/account/${encodeURIComponent(query || "")}`, "_blank");
+        }}
       />
 
       <main className="container" style={{ flex: 1 }}>
         {selectedToken ? (
-          <TradingTerminal
-            token={selectedToken}
-            trades={trades}
-            onBack={() => setSelectedToken(null)}
+          <ErrorBoundary onReset={() => setSelectedToken(null)}>
+            <TradingTerminal
+              token={selectedToken}
+              trades={trades}
+              onBack={() => setSelectedToken(null)}
+              onTradeExecuted={handleTradeExecuted}
+              onUpdateToken={handleTokenUpdated}
+              onOpenExplorer={(query) => {
+                window.open(`https://solscan.io/account/${encodeURIComponent(query || "")}`, "_blank");
+              }}
+            />
+          </ErrorBoundary>
+        ) : (
+          <TokenGrid
+            tokens={tokens}
+            onSelectToken={handleSelectToken}
             onTradeExecuted={handleTradeExecuted}
             onUpdateToken={handleTokenUpdated}
           />
-        ) : (
-          <>
-            {kingToken && (
-              <KingOfTheHill
-                token={kingToken}
-                onSelectToken={handleSelectToken}
-              />
-            )}
-            <TokenGrid
-              tokens={tokens}
-              onSelectToken={handleSelectToken}
-            />
-          </>
         )}
       </main>
 
@@ -243,8 +369,8 @@ export const App: React.FC = () => {
             </div>
           </div>
           <div style={{ display: "flex", gap: "16px" }}>
-            <span style={{ color: "var(--solana-green)" }}>● Devnet Live</span>
-            <span>Zero Platform Hosting Cost</span>
+            <span style={{ color: "var(--solana-green)" }}>● Solana Mainnet Live</span>
+            <span>SPL Token-2022 Launchpad</span>
           </div>
         </div>
       </footer>

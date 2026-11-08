@@ -1,20 +1,27 @@
 import React, { useState } from "react";
-import { Token } from "../types";
+import { Token, Trade } from "../types";
 import { TokenCard } from "./TokenCard";
-import { Search, Flame, Trophy, Zap, GraduationCap } from "lucide-react";
+import { VideoSwipeFeed } from "./VideoSwipeFeed";
+import { Search, Flame, Trophy, Zap, GraduationCap, Video, LayoutGrid } from "lucide-react";
 
 interface TokenGridProps {
   tokens: Token[];
   onSelectToken: (token: Token) => void;
+  onTradeExecuted: (trade: Trade, updatedToken: Token) => void;
+  onUpdateToken: (updatedToken: Token) => void;
 }
 
 type TabType = "trending" | "marketCap" | "new" | "graduated";
+type ViewMode = "video" | "grid";
 
 export const TokenGrid: React.FC<TokenGridProps> = ({
   tokens,
   onSelectToken,
+  onTradeExecuted,
+  onUpdateToken,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>("trending");
+  const [viewMode, setViewMode] = useState<ViewMode>("video");
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredTokens = tokens.filter((token) => {
@@ -39,106 +46,160 @@ export const TokenGrid: React.FC<TokenGridProps> = ({
   });
 
   return (
-    <div style={{ marginTop: "32px", marginBottom: "60px" }}>
-      {/* Search and Filters Header */}
+    <div style={{ marginTop: "20px", marginBottom: "40px" }}>
+      {/* Search, View Mode & Filters Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: "16px",
-          marginBottom: "24px",
+          gap: "12px",
+          marginBottom: "18px",
         }}
       >
-        {/* Tabs */}
-        <div
-          style={{
-            display: "flex",
-            background: "var(--bg-surface)",
-            borderRadius: "var(--radius-md)",
-            padding: "4px",
-            border: "1px solid var(--border-subtle)",
-          }}
-        >
-          <button
-            onClick={() => setActiveTab("trending")}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          {/* View Mode Toggle: TikTok Video Feed vs Grid */}
+          <div
             style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
               display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              background: activeTab === "trending" ? "var(--bg-surface-elevated)" : "transparent",
-              color: activeTab === "trending" ? "var(--solana-green)" : "var(--text-muted)",
+              background: "var(--bg-surface)",
+              borderRadius: "var(--radius-md)",
+              padding: "4px",
+              border: "1px solid rgba(255, 96, 0, 0.35)",
             }}
           >
-            <Flame size={14} />
-            Trending
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("video")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.84rem",
+                fontWeight: 800,
+                background:
+                  viewMode === "video"
+                    ? "linear-gradient(135deg, #ff6000 0%, #ff8c37 100%)"
+                    : "transparent",
+                color: viewMode === "video" ? "#ffffff" : "var(--text-muted)",
+              }}
+            >
+              <Video size={15} />
+              <span>Video Scroll</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("marketCap")}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              background: activeTab === "marketCap" ? "var(--bg-surface-elevated)" : "transparent",
-              color: activeTab === "marketCap" ? "var(--solana-purple)" : "var(--text-muted)",
-            }}
-          >
-            <Trophy size={14} />
-            Market Cap
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                background: viewMode === "grid" ? "var(--bg-surface-elevated)" : "transparent",
+                color: viewMode === "grid" ? "#ffffff" : "var(--text-muted)",
+              }}
+            >
+              <LayoutGrid size={15} />
+              <span>Grid View</span>
+            </button>
+          </div>
 
-          <button
-            onClick={() => setActiveTab("new")}
+          {/* Sort Tabs */}
+          <div
             style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
               display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              background: activeTab === "new" ? "var(--bg-surface-elevated)" : "transparent",
-              color: activeTab === "new" ? "var(--solana-cyan)" : "var(--text-muted)",
+              background: "var(--bg-surface)",
+              borderRadius: "var(--radius-md)",
+              padding: "4px",
+              border: "1px solid var(--border-subtle)",
             }}
           >
-            <Zap size={14} />
-            New Launches
-          </button>
+            <button
+              onClick={() => setActiveTab("trending")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                background: activeTab === "trending" ? "var(--bg-surface-elevated)" : "transparent",
+                color: activeTab === "trending" ? "var(--solana-green)" : "var(--text-muted)",
+              }}
+            >
+              <Flame size={14} />
+              Trending
+            </button>
 
-          <button
-            onClick={() => setActiveTab("graduated")}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              background: activeTab === "graduated" ? "var(--bg-surface-elevated)" : "transparent",
-              color: activeTab === "graduated" ? "#10b981" : "var(--text-muted)",
-            }}
-          >
-            <GraduationCap size={14} />
-            Graduated (Raydium)
-          </button>
+            <button
+              onClick={() => setActiveTab("marketCap")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                background: activeTab === "marketCap" ? "var(--bg-surface-elevated)" : "transparent",
+                color: activeTab === "marketCap" ? "var(--solana-purple)" : "var(--text-muted)",
+              }}
+            >
+              <Trophy size={14} />
+              Market Cap
+            </button>
+
+            <button
+              onClick={() => setActiveTab("new")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                background: activeTab === "new" ? "var(--bg-surface-elevated)" : "transparent",
+                color: activeTab === "new" ? "var(--solana-cyan)" : "var(--text-muted)",
+              }}
+            >
+              <Zap size={14} />
+              New Launches
+            </button>
+
+            <button
+              onClick={() => setActiveTab("graduated")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                background: activeTab === "graduated" ? "var(--bg-surface-elevated)" : "transparent",
+                color: activeTab === "graduated" ? "#10b981" : "var(--text-muted)",
+              }}
+            >
+              <GraduationCap size={14} />
+              Graduated (Raydium)
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
         <div
           style={{
             position: "relative",
-            minWidth: "280px",
+            minWidth: "260px",
           }}
         >
           <Search
@@ -164,19 +225,28 @@ export const TokenGrid: React.FC<TokenGridProps> = ({
         </div>
       </div>
 
-      {/* Grid of Tokens */}
+      {/* Main Content: TikTok Video Scroll OR Card Grid */}
       {sortedTokens.length > 0 ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",
-            gap: "20px",
-          }}
-        >
-          {sortedTokens.map((token) => (
-            <TokenCard key={token.id} token={token} onSelect={onSelectToken} />
-          ))}
-        </div>
+        viewMode === "video" ? (
+          <VideoSwipeFeed
+            tokens={sortedTokens}
+            onSelectToken={onSelectToken}
+            onTradeExecuted={onTradeExecuted}
+            onUpdateToken={onUpdateToken}
+          />
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {sortedTokens.map((token) => (
+              <TokenCard key={token.id} token={token} onSelect={onSelectToken} />
+            ))}
+          </div>
+        )
       ) : (
         <div
           className="glass-panel"
@@ -187,7 +257,11 @@ export const TokenGrid: React.FC<TokenGridProps> = ({
           }}
         >
           <Search size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
-          <p>No tokens found matching "{searchQuery}"</p>
+          <p>
+            {searchQuery
+              ? `No tokens found matching "${searchQuery}"`
+              : "No tokens launched yet. Click 'Launch Coin' above to deploy the first token."}
+          </p>
         </div>
       )}
     </div>
