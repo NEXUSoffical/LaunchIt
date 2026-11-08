@@ -107,7 +107,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const [resolvedTiktokId, setResolvedTiktokId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [inputUrl, setInputUrl] = useState(currentVideoUrl);
-  const [showComments, setShowComments] = useState(true);
+  const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
 
   // Comments synced with shared database
@@ -492,7 +492,8 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               loop
               style={{
                 width: "100%",
-                maxHeight: "420px",
+                maxHeight: "330px",
+                objectFit: "contain",
                 display: "block",
                 background: "#000",
               }}

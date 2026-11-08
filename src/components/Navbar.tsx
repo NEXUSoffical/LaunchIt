@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [handleInput, setHandleInput] = useState("");
 
-  const OFFICIAL_CA = "5fQERkgGuwGH6ix5xANkQxgdcDwrns5WWMvxTHAU8ytx";
+  const OFFICIAL_CA = "4akoUeUJcay3tQUc3BJbqGtaCwPanZ12xm7dLaunchit";
 
   const handleCopyOfficialCa = () => {
     navigator.clipboard.writeText(OFFICIAL_CA);
@@ -134,9 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
           <a
-            href={`https://stonkfun.xyz/token/${OFFICIAL_CA}`}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/?mint=${OFFICIAL_CA}`}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -150,11 +148,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               textDecoration: "none",
             }}
           >
-            <span>Buy $LAUNCHIT on Stonk</span>
-            <ExternalLink size={11} />
+            <span>Trade $LAUNCHIT Live</span>
           </a>
           <a
-            href={`https://dexscreener.com/solana/${OFFICIAL_CA}`}
+            href="https://x.com/seeItLaunchIt"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -171,7 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               textDecoration: "none",
             }}
           >
-            <span>DexScreener</span>
+            <span>@seeItLaunchIt on X</span>
             <ExternalLink size={11} />
           </a>
         </div>

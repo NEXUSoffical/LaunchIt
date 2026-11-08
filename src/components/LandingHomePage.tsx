@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Token } from "../types";
 
-const OFFICIAL_LAUNCHIT_CA = "5fQERkgGuwGH6ix5xANkQxgdcDwrns5WWMvxTHAU8ytx";
+const OFFICIAL_LAUNCHIT_CA = "4akoUeUJcay3tQUc3BJbqGtaCwPanZ12xm7dLaunchit";
 
 interface LandingHomePageProps {
   previewTokens?: Token[];
@@ -218,21 +218,7 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                 )}
               </button>
               <a
-                href={`https://stonkfun.xyz/token/${OFFICIAL_LAUNCHIT_CA}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary"
-                style={{
-                  padding: "7px 14px",
-                  fontSize: "0.8rem",
-                  textDecoration: "none",
-                }}
-              >
-                <span>Buy $LAUNCHIT on Stonk</span>
-                <ExternalLink size={13} />
-              </a>
-              <a
-                href={`https://dexscreener.com/solana/${OFFICIAL_LAUNCHIT_CA}`}
+                href="https://x.com/seeItLaunchIt"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-secondary"
@@ -242,7 +228,7 @@ export const LandingHomePage: React.FC<LandingHomePageProps> = ({ previewTokens 
                   textDecoration: "none",
                 }}
               >
-                <span>DexScreener</span>
+                <span>@seeItLaunchIt on X</span>
                 <ExternalLink size={13} />
               </a>
             </div>

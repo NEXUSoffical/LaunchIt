@@ -204,11 +204,11 @@ const SlideTradePanel: React.FC<{
     <div
       className="glass-panel"
       style={{
-        padding: "22px",
+        padding: "16px 20px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        gap: "16px",
+        gap: "12px",
         border: "1px solid rgba(255, 96, 0, 0.3)",
         background:
           "linear-gradient(165deg, rgba(22, 25, 36, 0.95) 0%, rgba(12, 14, 22, 0.98) 100%)",
@@ -223,7 +223,7 @@ const SlideTradePanel: React.FC<{
             justifyContent: "space-between",
             alignItems: "flex-start",
             gap: "12px",
-            marginBottom: "14px",
+            marginBottom: "10px",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -231,9 +231,9 @@ const SlideTradePanel: React.FC<{
               src={token.image || "/logo.jpg"}
               alt={token.name}
               style={{
-                width: "52px",
-                height: "52px",
-                borderRadius: "14px",
+                width: "48px",
+                height: "48px",
+                borderRadius: "12px",
                 objectFit: "cover",
                 border: "2px solid #ff6000",
               }}
@@ -243,32 +243,31 @@ const SlideTradePanel: React.FC<{
                 <span
                   className="mono"
                   style={{
-                    fontSize: "1.25rem",
+                    fontSize: "1.2rem",
                     fontWeight: 900,
                     color: "#ff8c37",
                   }}
                 >
                   ${token.symbol}
                 </span>
-                <span style={{ fontSize: "1.05rem", fontWeight: 800, color: "#ffffff" }}>
+                <span style={{ fontSize: "1rem", fontWeight: 800, color: "#ffffff" }}>
                   {token.name}
                 </span>
+                {token.creatorHandle && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--solana-cyan)", fontWeight: 600 }}>
+                    • {token.creatorHandle.startsWith("@") ? token.creatorHandle : `@${token.creatorHandle}`}
+                  </span>
+                )}
               </div>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "10px",
-                  fontSize: "0.76rem",
-                  color: "var(--text-muted)",
-                  marginTop: "3px",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                  marginTop: "6px",
                 }}
               >
-                {token.creatorHandle && (
-                  <span style={{ color: "var(--solana-cyan)", fontWeight: 600 }}>
-                    Creator: {token.creatorHandle.startsWith("@") ? token.creatorHandle : `@${token.creatorHandle}`}
-                  </span>
-                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -276,36 +275,67 @@ const SlideTradePanel: React.FC<{
                     setCopied(true);
                     setTimeout(() => setCopied(false), 1500);
                   }}
+                  title="Click to copy full Contract Address"
                   style={{
-                    background: "transparent",
-                    color: "var(--text-muted)",
+                    background: "rgba(20, 241, 149, 0.1)",
+                    border: "1px solid rgba(20, 241, 149, 0.45)",
+                    borderRadius: "6px",
+                    padding: "3px 8px",
+                    color: "var(--solana-green)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "4px",
+                    gap: "6px",
                     fontSize: "0.74rem",
+                    fontWeight: 700,
                     cursor: "pointer",
                   }}
                 >
-                  <span className="mono">
-                    {token.mint.slice(0, 4)}...{token.mint.slice(-8)}
-                  </span>
-                  {copied ? <Check size={12} color="var(--solana-green)" /> : <Copy size={12} />}
+                  <span style={{ color: "#ff8c37", fontWeight: 800 }}>CA:</span>
+                  <span className="mono">{token.mint}</span>
+                  {copied ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#14f195" }}>
+                      <Check size={12} /> Copied!
+                    </span>
+                  ) : (
+                    <Copy size={12} color="#94a3b8" />
+                  )}
                 </button>
                 <a
-                  href={`https://solscan.io/account/${encodeURIComponent(token.mint)}`}
+                  href={`https://solscan.io/account/${encodeURIComponent(token.launcherWallet || token.mint)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: "var(--solana-green)", display: "inline-flex", alignItems: "center" }}
-                  title="View on Solscan"
+                  style={{ color: "var(--solana-green)", display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "0.72rem", textDecoration: "none" }}
+                  title="View On-Chain Ledger on Solscan"
                 >
-                  <ExternalLink size={12} />
+                  <span>Solscan</span>
+                  <ExternalLink size={11} />
                 </a>
               </div>
             </div>
           </div>
 
-          {/* Up / Down Video Flipper Controls */}
+          {/* Up / Down Video Flipper Controls + Quick Open Chart Button */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <button
+              type="button"
+              onClick={() => onSelectToken(token)}
+              className="btn-secondary"
+              style={{
+                padding: "5px 10px",
+                borderRadius: "8px",
+                fontSize: "0.75rem",
+                fontWeight: 800,
+                border: "1px solid rgba(255, 96, 0, 0.45)",
+                color: "#ff8c37",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <BarChart3 size={13} color="#ff8c37" />
+              <span>Full Chart</span>
+            </button>
             <span
               className="mono"
               style={{
@@ -349,13 +379,13 @@ const SlideTradePanel: React.FC<{
           </div>
         </div>
 
-        {token.description && (
+        {token.description && !token.description.startsWith("http") && (
           <p
             style={{
-              fontSize: "0.84rem",
+              fontSize: "0.8rem",
               color: "var(--text-secondary)",
-              lineHeight: 1.45,
-              marginBottom: "14px",
+              lineHeight: 1.35,
+              marginBottom: "10px",
             }}
           >
             {token.description}
