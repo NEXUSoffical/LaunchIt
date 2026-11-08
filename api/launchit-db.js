@@ -298,7 +298,9 @@ export function applyDbAction(action, payload) {
           changed = true;
         } else if (
           (incoming.volume24hSol || 0) > (store.tokens[idx].volume24hSol || 0) ||
-          (incoming.videoUrl && !store.tokens[idx].videoUrl)
+          (incoming.videoUrl && !store.tokens[idx].videoUrl) ||
+          (incoming.likes?.length || 0) !== (store.tokens[idx].likes?.length || 0) ||
+          (incoming.repliesCount || 0) > (store.tokens[idx].repliesCount || 0)
         ) {
           store.tokens[idx] = { ...store.tokens[idx], ...incoming };
           changed = true;

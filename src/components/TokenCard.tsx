@@ -1,6 +1,6 @@
 import React from "react";
 import { Token } from "../types";
-import { CheckCircle2, TrendingUp, MessageSquare } from "lucide-react";
+import { CheckCircle2, TrendingUp, MessageSquare, Heart } from "lucide-react";
 
 interface TokenCardProps {
   token: Token;
@@ -169,10 +169,16 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
           <TrendingUp size={12} color="#ff8c37" />
           {(token.volume24hSol || 0).toFixed(1)} SOL Vol
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <MessageSquare size={12} />
-          {token.repliesCount}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "4px", color: (token.likes?.length || 0) > 0 ? "#f43f5e" : "var(--text-muted)" }}>
+            <Heart size={12} fill={(token.likes?.length || 0) > 0 ? "#f43f5e" : "none"} />
+            {token.likes?.length || 0}
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <MessageSquare size={12} />
+            {token.repliesCount || 0}
+          </span>
+        </div>
       </div>
     </div>
   );

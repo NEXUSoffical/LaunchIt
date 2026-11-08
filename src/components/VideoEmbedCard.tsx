@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { Token } from "../types";
-import { Video, ExternalLink, Link2, Check, Edit3, Upload } from "lucide-react";
+import { ChatMessage } from "../types/auth";
+import { useAuth } from "../context/AuthContext";
+import { useWallet } from "../context/WalletContext";
+import {
+  fetchSharedCommunityForMint,
+  subscribeSharedDb,
+  syncAddMessage,
+} from "../services/dbSync";
+import {
+  Video,
+  ExternalLink,
+  Link2,
+  Check,
+  Edit3,
+  Upload,
+  Heart,
+  MessageSquare,
+  Send,
+} from "lucide-react";
 
 interface VideoEmbedCardProps {
   token: Token;
@@ -82,17 +100,57 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   token,
   onUpdateToken,
 }) => {
+  const { currentUser } = useAuth();
+  const { publicKey } = useWallet();
+
   const currentVideoUrl = extractVideoUrlFromToken(token);
   const [resolvedTiktokId, setResolvedTiktokId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [inputUrl, setInputUrl] = useState(currentVideoUrl);
+  const [showComments, setShowComments] = useState(true);
+  const [commentInput, setCommentInput] = useState("");
+
+  // Comments synced with shared database
+  const [comments, setComments] = useState<ChatMessage[]>(() => {
+    try {
+      const stored = localStorage.getItem(`launchit_chat_${token.mint}`);
+      if (stored) {
+        const parsed: ChatMessage[] = JSON.parse(stored);
+        return parsed.filter((m) => !m.authorId?.startsWith("usr_seed_"));
+      }
+    } catch (_) {}
+    return [];
+  });
 
   useEffect(() => {
     setInputUrl(extractVideoUrlFromToken(token));
     setResolvedTiktokId(null);
   }, [token.mint, token.videoUrl, token.socials?.website]);
 
-  // If user pasted a short TikTok link (e.g. vm.tiktok.com) or TikTok link without numeric ID, resolve via TikTok oEmbed
+  useEffect(() => {
+    let active = true;
+    fetchSharedCommunityForMint(token.mint, [], comments).then((res) => {
+      if (!active) return;
+      if (Array.isArray(res.messages)) {
+        setComments(res.messages);
+      }
+    });
+
+    const unsubscribe = subscribeSharedDb({
+      onMessagesUpdate: (mint, updatedMessages) => {
+        if (mint === token.mint) {
+          setComments(updatedMessages);
+        }
+      },
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [token.mint]);
+
+  // Resolve short TikTok links via TikTok oEmbed
   useEffect(() => {
     if (!currentVideoUrl || !currentVideoUrl.toLowerCase().includes("tiktok.com")) {
       return;
@@ -125,6 +183,55 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
       ? { type: "tiktok", id: resolvedTiktokId, originalUrl: currentVideoUrl }
       : parsed;
 
+  const userIdentifier = publicKey || currentUser?.id || currentUser?.solanaWallet || "anon";
+  const currentLikes = Array.isArray(token.likes) ? token.likes : [];
+  const hasLiked = currentLikes.includes(userIdentifier);
+
+  const handleToggleLike = () => {
+    if (!onUpdateToken) return;
+    const nextLikes = hasLiked
+      ? currentLikes.filter((id) => id !== userIdentifier)
+      : [...currentLikes, userIdentifier];
+    onUpdateToken({
+      ...token,
+      likes: nextLikes,
+    });
+  };
+
+  const handlePostComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentInput.trim()) return;
+
+    const authorName =
+      currentUser?.username ||
+      (publicKey ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}` : "Trader");
+
+    const newMsg: ChatMessage = {
+      id: `chat-${Date.now()}`,
+      mint: token.mint,
+      authorId: userIdentifier,
+      authorUsername: authorName,
+      authorAvatar: currentUser?.avatarUrl || "/logo.jpg",
+      text: commentInput.trim(),
+      timestamp: Date.now(),
+    };
+
+    const nextComments = [...comments, newMsg];
+    setComments(nextComments);
+    try {
+      localStorage.setItem(`launchit_chat_${token.mint}`, JSON.stringify(nextComments));
+    } catch (_) {}
+    syncAddMessage(newMsg);
+
+    if (onUpdateToken) {
+      onUpdateToken({
+        ...token,
+        repliesCount: nextComments.length,
+      });
+    }
+    setCommentInput("");
+  };
+
   const handleSaveVideo = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = inputUrl.trim();
@@ -146,10 +253,13 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
     <div
       className="glass-panel"
       style={{
-        padding: "18px",
+        padding: "16px",
         border: "1px solid rgba(255, 96, 0, 0.28)",
         background:
-          "linear-gradient(180deg, rgba(255, 96, 0, 0.06) 0%, rgba(15, 17, 24, 0.92) 100%)",
+          "linear-gradient(180deg, rgba(255, 96, 0, 0.06) 0%, rgba(15, 17, 24, 0.94) 100%)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
       }}
     >
       {/* Header */}
@@ -158,7 +268,6 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "12px",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -234,7 +343,6 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
             display: "flex",
             flexDirection: "column",
             gap: "10px",
-            marginBottom: effectiveVideo ? "14px" : "0",
             padding: "12px",
             borderRadius: "10px",
             background: "var(--bg-surface)",
@@ -337,7 +445,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               title={`${token.name} TikTok Video`}
               style={{
                 width: "100%",
-                height: "540px",
+                height: "420px",
                 border: "none",
                 display: "block",
               }}
@@ -352,7 +460,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               title={`${token.name} YouTube Video`}
               style={{
                 width: "100%",
-                height: "440px",
+                height: "360px",
                 border: "none",
                 display: "block",
               }}
@@ -367,7 +475,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               title={`${token.name} Instagram Reel`}
               style={{
                 width: "100%",
-                height: "520px",
+                height: "420px",
                 border: "none",
                 display: "block",
               }}
@@ -384,7 +492,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               loop
               style={{
                 width: "100%",
-                maxHeight: "520px",
+                maxHeight: "420px",
                 display: "block",
                 background: "#000",
               }}
@@ -417,6 +525,176 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               </a>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TikTok-Style Like & Comment Action Bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          paddingTop: "4px",
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleToggleLike}
+          style={{
+            flex: 1,
+            padding: "9px 14px",
+            borderRadius: "10px",
+            background: hasLiked
+              ? "linear-gradient(135deg, rgba(244, 63, 94, 0.25) 0%, rgba(255, 96, 0, 0.2) 100%)"
+              : "var(--bg-surface)",
+            border: hasLiked
+              ? "1px solid rgba(244, 63, 94, 0.6)"
+              : "1px solid var(--border-subtle)",
+            color: hasLiked ? "#fb7185" : "#ffffff",
+            fontWeight: 800,
+            fontSize: "0.84rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "7px",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Heart
+            size={16}
+            fill={hasLiked ? "#f43f5e" : "none"}
+            color={hasLiked ? "#f43f5e" : "#ffffff"}
+          />
+          <span>
+            {currentLikes.length} {currentLikes.length === 1 ? "Like" : "Likes"}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowComments((v) => !v)}
+          style={{
+            flex: 1,
+            padding: "9px 14px",
+            borderRadius: "10px",
+            background: showComments
+              ? "rgba(255, 96, 0, 0.14)"
+              : "var(--bg-surface)",
+            border: showComments
+              ? "1px solid rgba(255, 96, 0, 0.4)"
+              : "1px solid var(--border-subtle)",
+            color: "#ffffff",
+            fontWeight: 800,
+            fontSize: "0.84rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "7px",
+            cursor: "pointer",
+          }}
+        >
+          <MessageSquare size={16} color="#ff8c37" />
+          <span>
+            {comments.length} {comments.length === 1 ? "Comment" : "Comments"}
+          </span>
+        </button>
+      </div>
+
+      {/* Live Video Comments Drawer */}
+      {showComments && (
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "10px",
+            padding: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          {/* Comment Input Form */}
+          <form onSubmit={handlePostComment} style={{ display: "flex", gap: "8px" }}>
+            <input
+              type="text"
+              placeholder={`Comment on $${token.symbol} video...`}
+              value={commentInput}
+              onChange={(e) => setCommentInput(e.target.value)}
+              style={{
+                flex: 1,
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "8px",
+                padding: "8px 12px",
+                color: "#ffffff",
+                fontSize: "0.8rem",
+                outline: "none",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!commentInput.trim()}
+              className="btn-primary"
+              style={{
+                padding: "8px 12px",
+                fontSize: "0.78rem",
+                opacity: commentInput.trim() ? 1 : 0.5,
+              }}
+            >
+              <Send size={13} />
+              <span>Post</span>
+            </button>
+          </form>
+
+          {/* Comments List */}
+          <div
+            style={{
+              maxHeight: "145px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            {comments.length > 0 ? (
+              [...comments].reverse().map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: "8px",
+                    background: "rgba(255, 255, 255, 0.03)",
+                    fontSize: "0.78rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: 700, color: "#ff8c37" }}>
+                      @{c.authorUsername.replace(/^@/, "")}
+                    </span>
+                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
+                      {new Date(c.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  <div style={{ color: "var(--text-primary)", lineHeight: 1.35 }}>{c.text}</div>
+                </div>
+              ))
+            ) : (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "10px 0",
+                  fontSize: "0.75rem",
+                  color: "var(--text-muted)",
+                }}
+              >
+                No comments yet — be the first to comment on this video!
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

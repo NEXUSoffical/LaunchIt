@@ -416,7 +416,7 @@ const SlideTradePanel: React.FC<{
               {token.volume24hSol.toFixed(2)} SOL
             </div>
             <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-              {token.repliesCount || 0} chat msgs
+              ❤️ {token.likes?.length || 0} • 💬 {token.repliesCount || 0}
             </div>
           </div>
         </div>

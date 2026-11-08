@@ -24,6 +24,7 @@ export interface Token {
   realTokenReserves: number; // in tokens
   volume24hSol: number;
   repliesCount: number;
+  likes?: string[];
   isGraduated: boolean;
   createdAt: number;
   socials: {

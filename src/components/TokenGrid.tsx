@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Token, Trade } from "../types";
 import { TokenCard } from "./TokenCard";
 import { VideoSwipeFeed } from "./VideoSwipeFeed";
-import { Search, Flame, Trophy, Zap, GraduationCap, Video, LayoutGrid } from "lucide-react";
+import { Search, Flame, Trophy, Zap, GraduationCap, Video, LayoutGrid, Heart } from "lucide-react";
 
 interface TokenGridProps {
   tokens: Token[];
@@ -11,7 +11,7 @@ interface TokenGridProps {
   onUpdateToken: (updatedToken: Token) => void;
 }
 
-type TabType = "trending" | "marketCap" | "new" | "graduated";
+type TabType = "trending" | "mostLiked" | "marketCap" | "new" | "graduated";
 type ViewMode = "video" | "grid";
 
 export const TokenGrid: React.FC<TokenGridProps> = ({
@@ -39,7 +39,16 @@ export const TokenGrid: React.FC<TokenGridProps> = ({
   });
 
   const sortedTokens = [...filteredTokens].sort((a, b) => {
-    if (activeTab === "trending") return b.volume24hSol - a.volume24hSol;
+    if (activeTab === "trending") {
+      const scoreA = a.volume24hSol + (a.likes?.length || 0) * 0.25 + (a.repliesCount || 0) * 0.1;
+      const scoreB = b.volume24hSol + (b.likes?.length || 0) * 0.25 + (b.repliesCount || 0) * 0.1;
+      return scoreB - scoreA;
+    }
+    if (activeTab === "mostLiked") {
+      const likesDiff = (b.likes?.length || 0) - (a.likes?.length || 0);
+      if (likesDiff !== 0) return likesDiff;
+      return (b.repliesCount || 0) - (a.repliesCount || 0);
+    }
     if (activeTab === "marketCap") return b.marketCapSol - a.marketCapSol;
     if (activeTab === "new") return b.createdAt - a.createdAt;
     return b.progressPercent - a.progressPercent;
@@ -137,6 +146,24 @@ export const TokenGrid: React.FC<TokenGridProps> = ({
             >
               <Flame size={14} />
               Trending
+            </button>
+
+            <button
+              onClick={() => setActiveTab("mostLiked")}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                background: activeTab === "mostLiked" ? "var(--bg-surface-elevated)" : "transparent",
+                color: activeTab === "mostLiked" ? "#f43f5e" : "var(--text-muted)",
+              }}
+            >
+              <Heart size={14} fill={activeTab === "mostLiked" ? "#f43f5e" : "none"} />
+              Most Liked
             </button>
 
             <button
