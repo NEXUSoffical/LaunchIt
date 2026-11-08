@@ -118,8 +118,8 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
         const newSpotPrice = currentPrice * (1 + buyStep);
         const mc = { sol: newSpotPrice * 1_000_000_000, usd: newSpotPrice * 1_000_000_000 * 150 };
 
-        const totalFeeBuy = solVal * 0.01;
-        const launcherFeeBuy = totalFeeBuy;
+        const graduationBonusSol = isGraduated && !token.isGraduated ? 0.5 : 0;
+        const launcherFeeBuy = solVal * 0.005 + graduationBonusSol; // 0.5% Launcher + 0.5% Platform Treasury (1% total)
 
         const updatedToken: Token = {
           ...token,
@@ -131,7 +131,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           marketCapSol: mc.sol,
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + solVal,
-          feeSplit: "launcher_100",
+          feeSplit: "split_50_50",
           unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeBuy,
         };
 
@@ -237,8 +237,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
 
         const mc = { sol: newSpotPrice * 1_000_000_000, usd: newSpotPrice * 1_000_000_000 * 150 };
 
-        const totalFeeSell = solReceived * 0.01;
-        const launcherFeeSell = totalFeeSell;
+        const launcherFeeSell = solReceived * 0.005; // 0.5% Launcher + 0.5% Platform Treasury (1% total)
 
         const updatedToken: Token = {
           ...token,
@@ -250,7 +249,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           marketCapSol: mc.sol,
           marketCapUsd: mc.usd,
           volume24hSol: token.volume24hSol + solReceived,
-          feeSplit: "launcher_100",
+          feeSplit: "split_50_50",
           unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherFeeSell,
         };
 
@@ -502,10 +501,10 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#ff8c37" }}>
                 <span>🚀</span>
                 <span>
-                  <b>1%</b> Coin Launcher Royalty
+                  <b>0.5%</b> Coin Launcher Royalty
                 </span>
               </div>
-              <span style={{ color: "var(--text-muted)" }}>100% to Coin Launcher</span>
+              <span style={{ color: "var(--solana-green)" }}>⚡ 0.5% Platform Fee</span>
             </div>
           </div>
         </div>
@@ -617,10 +616,10 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#ff8c37" }}>
                 <span>🚀</span>
                 <span>
-                  <b>1%</b> Coin Launcher Royalty
+                  <b>0.5%</b> Coin Launcher Royalty
                 </span>
               </div>
-              <span style={{ color: "var(--text-muted)" }}>100% to Coin Launcher</span>
+              <span style={{ color: "var(--solana-green)" }}>⚡ 0.5% Platform Fee</span>
             </div>
           </div>
         </div>

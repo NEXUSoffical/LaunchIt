@@ -17,6 +17,8 @@ const DEVNET_RPCS = ["https://api.devnet.solana.com"];
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+export const LAUNCHIT_TREASURY_WALLET = "EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V";
+const LAUNCHIT_TREASURY_PUBKEY = new PublicKey(LAUNCHIT_TREASURY_WALLET);
 const MINT_SIZE = 82;
 
 export async function getWorkingConnection(network: "devnet" | "mainnet-beta"): Promise<Connection> {
@@ -275,9 +277,22 @@ export async function executeTradeOnChain(params: {
 
   if (params.mode === "buy") {
     const totalLamports = Math.floor(params.solAmount * LAMPORTS_PER_SOL);
-    const launcherFeeLamports = Math.floor(totalLamports * 0.01); // 1% Coin Launcher Royalty (100% to Launcher)
-    const curveReserveLamports = Math.max(0, totalLamports - launcherFeeLamports);
+    const platformFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% LaunchIt Platform Treasury Fee
+    const launcherFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% Coin Launcher Royalty
+    const curveReserveLamports = Math.max(0, totalLamports - platformFeeLamports - launcherFeeLamports);
 
+    // 1. Send 0.5% Platform Fee directly to LaunchIt Treasury (EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V)
+    if (platformFeeLamports > 0) {
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: payerPubkey,
+          toPubkey: LAUNCHIT_TREASURY_PUBKEY,
+          lamports: platformFeeLamports,
+        })
+      );
+    }
+
+    // 2. Send 0.5% Coin Launcher Royalty directly to the Coin Launcher
     if (params.launcherWallet && launcherFeeLamports > 0) {
       try {
         const launcherPubkey = new PublicKey(params.launcherWallet);
@@ -303,6 +318,19 @@ export async function executeTradeOnChain(params: {
           fromPubkey: payerPubkey,
           toPubkey: recipientPubkey,
           lamports: curveReserveLamports,
+        })
+      );
+    }
+  } else {
+    // Sell: route 0.5% Platform Fee to LaunchIt Treasury + 0.5% Coin Launcher Royalty
+    const totalSellLamports = Math.floor(params.solAmount * LAMPORTS_PER_SOL);
+    const platformFeeLamports = Math.floor(totalSellLamports * 0.005);
+    if (platformFeeLamports > 0) {
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: payerPubkey,
+          toPubkey: LAUNCHIT_TREASURY_PUBKEY,
+          lamports: platformFeeLamports,
         })
       );
     }

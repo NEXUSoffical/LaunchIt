@@ -157,11 +157,11 @@ export const DeployGuideModal: React.FC<DeployGuideModalProps> = ({ isOpen, onCl
                 <Crown size={16} />
               </div>
               <h4 style={{ fontSize: "0.98rem", fontWeight: 800 }}>
-                3. 1% Coin Launcher Royalty Vault (100% to You)
+                3. 0.5% Coin Launcher Royalties on Every Trade
               </h4>
             </div>
             <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", lineHeight: "1.5" }}>
-              Every buy and sell on the bonding curve routes a <b>1% royalty fee</b> directly to the <b>Coin Launcher</b>—the person who minted and launched the coin. Spot a viral video early, launch the coin, and earn <b>100% of the 1% trading royalties</b> on all volume!
+              Every buy and sell on the bonding curve has a standard <b>1% trading fee</b>—split <b>0.5% directly to the Coin Launcher</b> (the person who minted and launched the coin) and <b>0.5% to the LaunchIt Platform</b>.
             </p>
           </div>
 
@@ -190,11 +190,11 @@ export const DeployGuideModal: React.FC<DeployGuideModalProps> = ({ isOpen, onCl
                 <GraduationCap size={16} />
               </div>
               <h4 style={{ fontSize: "0.98rem", fontWeight: 800 }}>
-                4. Fair-Launch Bonding Curve & 85 SOL Raydium Graduation
+                4. 85 SOL Raydium Graduation (+0.5 SOL Launcher Bonus)
               </h4>
             </div>
             <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", lineHeight: "1.5" }}>
-              Every coin launches fairly with <b>1,000,000,000 supply</b> and zero pre-allocation. Once the bonding curve accumulates <b>85 SOL</b> in liquidity, the coin automatically graduates and migrates liquidity to Raydium.
+              Every coin launches fairly with <b>1,000,000,000 supply</b> and zero pre-allocation. Once the bonding curve reaches <b>85 SOL</b>, the coin automatically graduates to Raydium and rewards the Coin Launcher with a <b>+0.5 SOL Graduation Bonus</b>!
             </p>
           </div>
         </div>

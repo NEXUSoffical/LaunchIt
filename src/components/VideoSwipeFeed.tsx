@@ -125,8 +125,7 @@ const SlideTradePanel: React.FC<{
     try {
       const solTraded = isBuy ? tradeAmount : activeSellQuote.solOut || 0;
       const tokensTraded = isBuy ? Math.round(activeBuyQuote.tokensOut || 0) : tradeAmount;
-      const feeSol = solTraded * 0.01;
-      const launcherDelta = feeSol;
+      const launcherDelta = solTraded * 0.005; // 0.5% Coin Launcher Royalty + 0.5% Platform Treasury (1% total)
 
       const { txSignature } = await executeTradeOnChain({
         network,
@@ -160,6 +159,9 @@ const SlideTradePanel: React.FC<{
         : Math.max(0.00000001, currentPrice * (1 - step * 0.8));
       const newMarketCapSol = newSpotPrice * 1_000_000_000;
 
+      const justGraduated = !token.isGraduated && newProgress >= 100;
+      const graduationBonusSol = justGraduated ? 0.5 : 0;
+
       const updatedToken: Token = {
         ...token,
         priceSol: newSpotPrice,
@@ -170,8 +172,8 @@ const SlideTradePanel: React.FC<{
         progressPercent: newProgress,
         volume24hSol: token.volume24hSol + solTraded,
         isGraduated: token.isGraduated || newProgress >= 100,
-        feeSplit: "launcher_100",
-        unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherDelta,
+        feeSplit: "split_50_50",
+        unclaimedLauncherFeesSol: (token.unclaimedLauncherFeesSol || 0) + launcherDelta + graduationBonusSol,
       };
 
       const newTrade: Trade = {
@@ -646,8 +648,9 @@ const SlideTradePanel: React.FC<{
           <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
             <span style={{ color: "#ff8c37", fontWeight: 700 }}>
               <Rocket size={11} style={{ display: "inline", marginRight: "3px" }} />
-              1% Coin Launcher Royalty
+              0.5% Launcher Royalty
             </span>
+            <span style={{ color: "var(--solana-green)" }}>• 0.5% Platform</span>
           </span>
         </div>
       </div>

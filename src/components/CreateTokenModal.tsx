@@ -134,9 +134,9 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
         creatorHandle: creatorIdentity,
         launcherHandle: currentUser ? `@${currentUser.username}` : creatorIdentity,
         launcherWallet: publicKey || currentUser?.solanaWallet || null,
-        feeSplit: "launcher_100",
+        feeSplit: "split_50_50",
         unclaimedCreatorFeesSol: 0,
-        unclaimedLauncherFeesSol: initialBuy * 0.01,
+        unclaimedLauncherFeesSol: initialBuy * 0.005,
         claimedCreatorFeesSol: 0,
         claimedLauncherFeesSol: 0,
         marketCapSol: 30.0 + realSol,
@@ -486,7 +486,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
               <span style={{ color: "var(--solana-green)", display: "flex", alignItems: "center", gap: "5px" }}>
                 <span>⚡</span> Token-2022 Rent: <b>0.002 SOL</b>
               </span>
-              <span style={{ color: "var(--text-muted)" }}>1% Trading Royalty (100% to Coin Launcher)</span>
+              <span style={{ color: "var(--text-muted)" }}>0.5% Coin Launcher Royalty + 0.5 SOL Grad Bonus</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>

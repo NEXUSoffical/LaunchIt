@@ -142,7 +142,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Coins size={18} color="#ff8c37" />
           <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "#fff" }}>
-            1% Coin Launcher Royalty Vault
+            Coin Launcher Royalty Vault (0.5% of All Trades)
           </span>
         </div>
 
@@ -157,7 +157,7 @@ export const CreatorRoyaltyVault: React.FC<CreatorRoyaltyVaultProps> = ({
             fontWeight: 700,
           }}
         >
-          ⚡ 100% of 1% Trading Fees Go to Coin Launcher
+          ⚡ 0.5% Launcher Royalty + 0.5 SOL Graduation Bonus
         </span>
       </div>
 
