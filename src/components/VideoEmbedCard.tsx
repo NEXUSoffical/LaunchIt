@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Token } from "../types";
 import { ChatMessage } from "../types/auth";
 import { useAuth } from "../context/AuthContext";
@@ -18,11 +18,14 @@ import {
   Heart,
   MessageSquare,
   Send,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 interface VideoEmbedCardProps {
   token: Token;
   onUpdateToken?: (updatedToken: Token) => void;
+  isActive?: boolean;
 }
 
 type ParsedVideo =
@@ -99,9 +102,15 @@ function parseVideoSource(url: string): ParsedVideo | null {
 export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   token,
   onUpdateToken,
+  isActive,
 }) => {
   const { currentUser } = useAuth();
   const { publicKey } = useWallet();
+
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
 
   const currentVideoUrl = extractVideoUrlFromToken(token);
   const [resolvedTiktokId, setResolvedTiktokId] = useState<string | null>(null);
@@ -109,6 +118,62 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const [inputUrl, setInputUrl] = useState(currentVideoUrl);
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
+
+  // IntersectionObserver to detect when video scrolls into/out of view
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setIsIntersecting(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          setIsIntersecting(entry.isIntersecting);
+        });
+      },
+      {
+        threshold: 0.45,
+      }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const shouldPlay = isActive !== undefined ? isActive : isIntersecting;
+
+  // Autoplay when scrolled onto, pause when scrolled away
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (shouldPlay) {
+      video.muted = isMuted;
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // If browser policy blocked unmuted playback, fallback to muted autoplay
+          video.muted = true;
+          setIsMuted(true);
+          video.play().catch(() => {});
+        });
+      }
+    } else {
+      video.pause();
+    }
+  }, [shouldPlay, isMuted]);
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+      if (videoRef.current.paused && shouldPlay) {
+        videoRef.current.play().catch(() => {});
+      }
+    }
+  };
 
   // Comments synced with shared database
   const [comments, setComments] = useState<ChatMessage[]>(() => {
@@ -251,6 +316,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
 
   return (
     <div
+      ref={cardRef}
       className="glass-panel"
       style={{
         padding: "16px",
@@ -441,7 +507,11 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
         >
           {effectiveVideo.type === "tiktok" && (
             <iframe
-              src={`https://www.tiktok.com/player/v1/${effectiveVideo.id}?music_info=1&description=1&rel=0`}
+              src={
+                shouldPlay
+                  ? `https://www.tiktok.com/player/v1/${effectiveVideo.id}?autoplay=1&mute=1&music_info=1&description=1&rel=0`
+                  : `https://www.tiktok.com/player/v1/${effectiveVideo.id}?autoplay=0&music_info=1&description=1&rel=0`
+              }
               title={`${token.name} TikTok Video`}
               style={{
                 width: "100%",
@@ -456,7 +526,11 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
 
           {effectiveVideo.type === "youtube" && (
             <iframe
-              src={`https://www.youtube.com/embed/${effectiveVideo.id}?rel=0`}
+              src={
+                shouldPlay
+                  ? `https://www.youtube.com/embed/${effectiveVideo.id}?autoplay=1&mute=1&loop=1&playlist=${effectiveVideo.id}&playsinline=1&rel=0`
+                  : `https://www.youtube.com/embed/${effectiveVideo.id}?autoplay=0&rel=0`
+              }
               title={`${token.name} YouTube Video`}
               style={{
                 width: "100%",
@@ -485,19 +559,60 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
           )}
 
           {effectiveVideo.type === "direct" && (
-            <video
-              src={effectiveVideo.url}
-              controls
-              playsInline
-              loop
-              style={{
-                width: "100%",
-                maxHeight: "330px",
-                objectFit: "contain",
-                display: "block",
-                background: "#000",
-              }}
-            />
+            <div style={{ position: "relative", width: "100%", background: "#000" }}>
+              <video
+                ref={videoRef}
+                src={effectiveVideo.url}
+                autoPlay
+                playsInline
+                loop
+                muted={isMuted}
+                controls
+                style={{
+                  width: "100%",
+                  maxHeight: "360px",
+                  objectFit: "contain",
+                  display: "block",
+                  background: "#000",
+                }}
+              />
+              <button
+                type="button"
+                onClick={toggleMute}
+                style={{
+                  position: "absolute",
+                  bottom: "48px",
+                  right: "12px",
+                  background: "rgba(0, 0, 0, 0.75)",
+                  backdropFilter: "blur(6px)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  color: "#fff",
+                  borderRadius: "999px",
+                  padding: "5px 12px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                  zIndex: 10,
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
+                }}
+                title={isMuted ? "Click to unmute" : "Click to mute"}
+              >
+                {isMuted ? (
+                  <>
+                    <VolumeX size={14} color="#ff8c37" />
+                    <span>Unmute</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 size={14} color="var(--solana-green)" />
+                    <span>Mute</span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
 
           {effectiveVideo.type === "external" && (

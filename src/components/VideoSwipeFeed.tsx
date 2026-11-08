@@ -843,9 +843,25 @@ export const VideoSwipeFeed: React.FC<VideoSwipeFeedProps> = ({
   const handleScroll = () => {
     const container = containerRef.current;
     if (!container || container.clientHeight === 0) return;
-    const idx = Math.round(container.scrollTop / container.clientHeight);
-    if (idx !== activeIndex && idx >= 0 && idx < tokens.length) {
-      setActiveIndex(idx);
+    const containerMid = container.getBoundingClientRect().top + container.clientHeight / 2;
+
+    let closestIdx = 0;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < container.children.length; i++) {
+      const child = container.children[i] as HTMLElement;
+      if (!child) continue;
+      const rect = child.getBoundingClientRect();
+      const childMid = rect.top + rect.height / 2;
+      const dist = Math.abs(containerMid - childMid);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestIdx = i;
+      }
+    }
+
+    if (closestIdx !== activeIndex && closestIdx >= 0 && closestIdx < tokens.length) {
+      setActiveIndex(closestIdx);
     }
   };
 
@@ -882,7 +898,11 @@ export const VideoSwipeFeed: React.FC<VideoSwipeFeedProps> = ({
           >
             {/* Left: Playable Vertical Video Card */}
             <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <VideoEmbedCard token={token} onUpdateToken={onUpdateToken} />
+              <VideoEmbedCard
+                token={token}
+                onUpdateToken={onUpdateToken}
+                isActive={idx === activeIndex}
+              />
             </div>
 
             {/* Right: Instant Buy/Sell & Live Metrics */}
