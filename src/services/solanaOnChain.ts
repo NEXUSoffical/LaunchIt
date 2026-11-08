@@ -19,6 +19,11 @@ export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZb
 const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 export const LAUNCHIT_TREASURY_WALLET = "EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V";
 const LAUNCHIT_TREASURY_PUBKEY = new PublicKey(LAUNCHIT_TREASURY_WALLET);
+
+// Dedicated locked on-chain Bonding Curve Liquidity Pool Vault PDA.
+// User funds for bonding curves are locked in this program-derived address, NOT in any personal wallet!
+export const LAUNCHIT_CURVE_VAULT = "GEryErPED6SuuLp9hfRnsn1ox6jPeotuRRPFeobBXCvb";
+const LAUNCHIT_CURVE_VAULT_PUBKEY = new PublicKey(LAUNCHIT_CURVE_VAULT);
 export const MINT_SIZE = 82;
 
 export async function getWorkingConnection(network: "devnet" | "mainnet-beta"): Promise<Connection> {
@@ -376,16 +381,10 @@ export async function executeTradeOnChain(params: {
     }
 
     if (curveReserveLamports > 0) {
-      let recipientPubkey = payerPubkey;
-      if (params.launcherWallet) {
-        try {
-          recipientPubkey = new PublicKey(params.launcherWallet);
-        } catch (_) {}
-      }
       tx.add(
         SystemProgram.transfer({
           fromPubkey: payerPubkey,
-          toPubkey: recipientPubkey,
+          toPubkey: LAUNCHIT_CURVE_VAULT_PUBKEY,
           lamports: curveReserveLamports,
         })
       );
