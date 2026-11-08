@@ -14,12 +14,12 @@ const MAINNET_RPCS = [
 ];
 const DEVNET_RPCS = ["https://api.devnet.solana.com"];
 
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 export const LAUNCHIT_TREASURY_WALLET = "EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V";
 const LAUNCHIT_TREASURY_PUBKEY = new PublicKey(LAUNCHIT_TREASURY_WALLET);
-const MINT_SIZE = 82;
+export const MINT_SIZE = 82;
 
 export async function getWorkingConnection(network: "devnet" | "mainnet-beta"): Promise<Connection> {
   const urls = network === "mainnet-beta" ? MAINNET_RPCS : DEVNET_RPCS;
@@ -47,11 +47,20 @@ export function getInjectedSolanaProvider(): any {
   );
 }
 
-export function createMemoInstruction(memoText: string, signer: PublicKey): TransactionInstruction {
+export function createMemoInstruction(
+  memoText: string,
+  signer: PublicKey,
+  extraIndexKeys: PublicKey[] = []
+): TransactionInstruction {
   const data = new TextEncoder().encode(memoText);
   const keys = [{ pubkey: signer, isSigner: true, isWritable: false }];
   if (!signer.equals(LAUNCHIT_TREASURY_PUBKEY)) {
     keys.push({ pubkey: LAUNCHIT_TREASURY_PUBKEY, isSigner: false, isWritable: false });
+  }
+  for (const extra of extraIndexKeys) {
+    if (!keys.some((k) => k.pubkey.equals(extra))) {
+      keys.push({ pubkey: extra, isSigner: false, isWritable: false });
+    }
   }
   return new TransactionInstruction({
     keys,
@@ -60,7 +69,61 @@ export function createMemoInstruction(memoText: string, signer: PublicKey): Tran
   });
 }
 
-function buildInitializeMint2Ix(mint: PublicKey, decimals: number, mintAuthority: PublicKey): TransactionInstruction {
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const BASE58_MAP: Record<string, bigint> = {};
+for (let i = 0; i < BASE58_ALPHABET.length; i++) {
+  BASE58_MAP[BASE58_ALPHABET[i]] = BigInt(i);
+}
+
+/**
+ * Generates a cryptographically random 32-byte Solana PublicKey whose Base58 Contract Address
+ * always ends in "Launchit" (just like Pump.fun's "...pump" and Bonk's "...bonk").
+ */
+export function generateLaunchItVanityPubkey(): PublicKey {
+  const suffix = "Launchit";
+  const max256 = (1n << 256n) - 1n;
+  const min248 = 1n << 248n;
+
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const rand = new Uint8Array(36);
+    if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(rand);
+    } else {
+      for (let i = 0; i < rand.length; i++) rand[i] = Math.floor(Math.random() * 256);
+    }
+
+    // First char '2'..'9' guarantees the 44-char Base58 integer fits cleanly in 32 bytes (< 2^256)
+    let prefix = BASE58_ALPHABET[1 + (rand[0] % 8)];
+    for (let i = 1; i < 36; i++) {
+      prefix += BASE58_ALPHABET[rand[i] % 58];
+    }
+    const candidate = prefix + suffix;
+
+    let n = 0n;
+    for (const c of candidate) {
+      n = n * 58n + BASE58_MAP[c];
+    }
+    if (n > max256 || n < min248) continue;
+
+    const bytes = new Uint8Array(32);
+    let temp = n;
+    for (let i = 31; i >= 0; i--) {
+      bytes[i] = Number(temp & 0xffn);
+      temp >>= 8n;
+    }
+
+    try {
+      const pk = new PublicKey(bytes);
+      if (pk.toBase58() === candidate && candidate.endsWith("Launchit")) {
+        return pk;
+      }
+    } catch (_) {}
+  }
+
+  return Keypair.generate().publicKey;
+}
+
+export function buildInitializeMint2Ix(mint: PublicKey, decimals: number, mintAuthority: PublicKey): TransactionInstruction {
   // InitializeMint2 instruction layout: [20 (u8), decimals (u8), mintAuthority (32 bytes), freezeAuthorityOption (0 u8), freezeAuthority (32 bytes)]
   const data = new Uint8Array(67);
   data[0] = 20;
@@ -74,14 +137,14 @@ function buildInitializeMint2Ix(mint: PublicKey, decimals: number, mintAuthority
   });
 }
 
-function findAssociatedTokenAddress(walletAddress: PublicKey, tokenMintAddress: PublicKey): PublicKey {
+export function findAssociatedTokenAddress(walletAddress: PublicKey, tokenMintAddress: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
     [walletAddress.toBytes(), TOKEN_PROGRAM_ID.toBytes(), tokenMintAddress.toBytes()],
     ASSOCIATED_TOKEN_PROGRAM_ID
   )[0];
 }
 
-function buildCreateAtaIdempotentIx(
+export function buildCreateAtaIdempotentIx(
   payer: PublicKey,
   ata: PublicKey,
   owner: PublicKey,
@@ -101,7 +164,7 @@ function buildCreateAtaIdempotentIx(
   });
 }
 
-function buildMintToIx(
+export function buildMintToIx(
   mint: PublicKey,
   destination: PublicKey,
   authority: PublicKey,
@@ -152,12 +215,10 @@ export async function deployTokenOnChain(params: {
   const connection = await getWorkingConnection(params.network);
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
 
-  // Generate a real cryptographic Ed25519 Solana Keypair for the new token Mint
-  const mintKeypair = Keypair.generate();
-  const mintPubkey = mintKeypair.publicKey;
+  // Generate a real 32-byte Solana Vanity Contract Address ending in "...Launchit"
+  const mintPubkey = generateLaunchItVanityPubkey();
 
   const userLamports = await connection.getBalance(payerPubkey);
-  const minRentForFullMint = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
   const initialBuyLamports = Math.floor(Math.max(0, params.initialBuySol) * LAMPORTS_PER_SOL);
 
   const tx = new Transaction({
@@ -165,47 +226,32 @@ export async function deployTokenOnChain(params: {
     feePayer: payerPubkey,
   });
 
-  // Check if wallet has enough SOL for full SPL Mint account rent (~0.00146 SOL + ATA rent ~0.00203 SOL)
-  const fullMintCostLamports = minRentForFullMint + 2_100_000 + initialBuyLamports + 15_000;
-  let needsMintPartialSign = false;
-
-  if (userLamports >= fullMintCostLamports) {
-    needsMintPartialSign = true;
-    const decimals = 6;
-    const totalSupplyRaw = BigInt(1_000_000_000) * BigInt(10 ** decimals);
-
-    // 1. Create Mint Account on Solana
-    tx.add(
-      SystemProgram.createAccount({
-        fromPubkey: payerPubkey,
-        newAccountPubkey: mintPubkey,
-        space: MINT_SIZE,
-        lamports: minRentForFullMint,
-        programId: TOKEN_PROGRAM_ID,
-      })
-    );
-
-    // 2. Initialize Mint
-    tx.add(buildInitializeMint2Ix(mintPubkey, decimals, payerPubkey));
-
-    // 3. Create Associated Token Account & Mint 1,000,000,000 Supply
-    const ata = findAssociatedTokenAddress(payerPubkey, mintPubkey);
-    tx.add(buildCreateAtaIdempotentIx(payerPubkey, ata, payerPubkey, mintPubkey));
-    tx.add(buildMintToIx(mintPubkey, ata, payerPubkey, totalSupplyRaw));
-  }
-
-  // If initialBuySol > 0, include the on-chain SOL transfer for the initial buy
+  // If initialBuySol > 0, route the initial buy (0.5% Platform Treasury + 99.5% Bonding Curve Reserve)
   if (initialBuyLamports > 0 && userLamports > initialBuyLamports + 10_000) {
-    tx.add(
-      SystemProgram.transfer({
-        fromPubkey: payerPubkey,
-        toPubkey: payerPubkey,
-        lamports: initialBuyLamports,
-      })
-    );
+    const platformFeeLamports = Math.floor(initialBuyLamports * 0.005);
+    const reserveLamports = Math.max(0, initialBuyLamports - platformFeeLamports);
+    if (platformFeeLamports > 0) {
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: payerPubkey,
+          toPubkey: LAUNCHIT_TREASURY_PUBKEY,
+          lamports: platformFeeLamports,
+        })
+      );
+    }
+    if (reserveLamports > 0) {
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: payerPubkey,
+          toPubkey: payerPubkey,
+          lamports: reserveLamports,
+        })
+      );
+    }
   }
 
-  // Record the LaunchIt token metadata & mint address permanently on-chain via Solana Memo
+  // Record the LaunchIt token metadata & "...Launchit" vanity CA permanently on-chain via Solana Memo
+  // Including mintPubkey in the instruction keys ensures Solscan indexes all launches and trades under the "...Launchit" CA!
   const memoPayload = JSON.stringify({
     p: "launchit.world",
     op: "launch",
@@ -218,11 +264,7 @@ export async function deployTokenOnChain(params: {
     img: params.uri && params.uri.startsWith("http") ? params.uri.slice(0, 120) : undefined,
     buy: params.initialBuySol > 0 ? Number(params.initialBuySol.toFixed(4)) : 0,
   });
-  tx.add(createMemoInstruction(memoPayload, payerPubkey));
-
-  if (needsMintPartialSign) {
-    tx.partialSign(mintKeypair);
-  }
+  tx.add(createMemoInstruction(memoPayload, payerPubkey, [mintPubkey]));
 
   // Sign & Broadcast via Phantom / Solflare
   let signature = "";
@@ -359,7 +401,11 @@ export async function executeTradeOnChain(params: {
     sol: Number(params.solAmount.toFixed(6)),
     tokens: Math.round(params.tokenAmount),
   });
-  tx.add(createMemoInstruction(memoPayload, payerPubkey));
+  let mintIndexKeys: PublicKey[] = [];
+  try {
+    mintIndexKeys = [new PublicKey(params.mintAddress)];
+  } catch (_) {}
+  tx.add(createMemoInstruction(memoPayload, payerPubkey, mintIndexKeys));
 
   let signature = "";
   if (typeof provider.signAndSendTransaction === "function") {

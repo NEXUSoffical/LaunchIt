@@ -161,7 +161,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
       onTokenCreated(newToken);
       notifyTx(
         txSignature,
-        `TOKEN DEPLOYED ON-CHAIN: $${symbol.toUpperCase()} (${mintAddr.slice(0, 6)}...${mintAddr.slice(-4)})`
+        `TOKEN DEPLOYED ON-CHAIN: $${symbol.toUpperCase()} (${mintAddr.slice(0, 4)}...${mintAddr.slice(-8)})`
       );
       onClose();
     } catch (err: any) {

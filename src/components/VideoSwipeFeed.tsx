@@ -287,7 +287,7 @@ const SlideTradePanel: React.FC<{
                   }}
                 >
                   <span className="mono">
-                    {token.mint.slice(0, 5)}...{token.mint.slice(-4)}
+                    {token.mint.slice(0, 4)}...{token.mint.slice(-8)}
                   </span>
                   {copied ? <Check size={12} color="var(--solana-green)" /> : <Copy size={12} />}
                 </button>
