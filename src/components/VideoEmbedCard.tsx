@@ -110,7 +110,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isIntersecting, setIsIntersecting] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
 
   const currentVideoUrl = extractVideoUrlFromToken(token);
   const [resolvedTiktokId, setResolvedTiktokId] = useState<string | null>(null);
@@ -118,6 +118,22 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const [inputUrl, setInputUrl] = useState(currentVideoUrl);
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
+
+  // Auto-unmute on first click/interaction if browser temporarily forced muted playback
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      if (videoRef.current && isMuted) {
+        videoRef.current.muted = false;
+        setIsMuted(false);
+      }
+    };
+    window.addEventListener("pointerdown", handleFirstInteraction, { once: true });
+    window.addEventListener("keydown", handleFirstInteraction, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+    };
+  }, [isMuted]);
 
   // IntersectionObserver to detect when video scrolls into/out of view
   useEffect(() => {
@@ -142,7 +158,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
 
   const shouldPlay = isActive !== undefined ? isActive : isIntersecting;
 
-  // Autoplay when scrolled onto, pause when scrolled away
+  // Autoplay with sound when scrolled onto, pause when scrolled away
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -152,7 +168,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise.catch(() => {
-          // If browser policy blocked unmuted playback, fallback to muted autoplay
+          // If browser security strictly blocks sound before first gesture, fallback to muted so it still loops
           video.muted = true;
           setIsMuted(true);
           video.play().catch(() => {});
@@ -509,7 +525,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
             <iframe
               src={
                 shouldPlay
-                  ? `https://www.tiktok.com/player/v1/${effectiveVideo.id}?autoplay=1&mute=1&music_info=1&description=1&rel=0`
+                  ? `https://www.tiktok.com/player/v1/${effectiveVideo.id}?autoplay=1&mute=0&music_info=1&description=1&rel=0`
                   : `https://www.tiktok.com/player/v1/${effectiveVideo.id}?autoplay=0&music_info=1&description=1&rel=0`
               }
               title={`${token.name} TikTok Video`}
@@ -528,7 +544,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
             <iframe
               src={
                 shouldPlay
-                  ? `https://www.youtube.com/embed/${effectiveVideo.id}?autoplay=1&mute=1&loop=1&playlist=${effectiveVideo.id}&playsinline=1&rel=0`
+                  ? `https://www.youtube.com/embed/${effectiveVideo.id}?autoplay=1&mute=0&loop=1&playlist=${effectiveVideo.id}&playsinline=1&rel=0`
                   : `https://www.youtube.com/embed/${effectiveVideo.id}?autoplay=0&rel=0`
               }
               title={`${token.name} YouTube Video`}
@@ -583,14 +599,14 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
                   position: "absolute",
                   bottom: "48px",
                   right: "12px",
-                  background: "rgba(0, 0, 0, 0.75)",
+                  background: isMuted ? "rgba(255, 96, 0, 0.9)" : "rgba(20, 241, 149, 0.9)",
                   backdropFilter: "blur(6px)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  color: "#fff",
+                  border: "1px solid rgba(255, 255, 255, 0.25)",
+                  color: isMuted ? "#ffffff" : "#05070e",
                   borderRadius: "999px",
                   padding: "5px 12px",
                   fontSize: "0.74rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
@@ -598,17 +614,17 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
                   zIndex: 10,
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
                 }}
-                title={isMuted ? "Click to unmute" : "Click to mute"}
+                title={isMuted ? "Click to unmute sound" : "Sound is ON - Click to mute"}
               >
                 {isMuted ? (
                   <>
-                    <VolumeX size={14} color="#ff8c37" />
-                    <span>Unmute</span>
+                    <VolumeX size={14} color="#ffffff" />
+                    <span>🔇 Muted (Click for Sound)</span>
                   </>
                 ) : (
                   <>
-                    <Volume2 size={14} color="var(--solana-green)" />
-                    <span>Mute</span>
+                    <Volume2 size={14} color="#05070e" />
+                    <span>🔊 Sound ON</span>
                   </>
                 )}
               </button>
