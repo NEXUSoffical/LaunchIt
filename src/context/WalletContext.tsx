@@ -109,11 +109,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       // Fetch real on-chain SOL balance for the connected wallet
       const fetchRealBalance = async () => {
+        const win = window as any;
+        const activeProvider = win?.phantom?.solana || win?.solflare || win?.solana;
+        const liveWalletAddr =
+          activeProvider?.publicKey?.toString?.() || currentUser.solanaWallet;
+        if (liveWalletAddr && liveWalletAddr !== publicKey) {
+          setPublicKey(liveWalletAddr);
+        }
         const urls = network === "mainnet-beta" ? MAINNET_RPC_URLS : [DEVNET_RPC_URL];
         for (const url of urls) {
           try {
             const conn = new Connection(url, "confirmed");
-            const lamports = await conn.getBalance(new PublicKey(currentUser.solanaWallet));
+            const lamports = await conn.getBalance(new PublicKey(liveWalletAddr));
             const realSol = lamports / LAMPORTS_PER_SOL;
             setBalance(realSol);
             updateUserBalance(realSol, false);
@@ -122,6 +129,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       };
       fetchRealBalance();
+      const balInterval = setInterval(fetchRealBalance, 8000);
+      return () => clearInterval(balInterval);
     }
   }, [currentUser?.solanaWallet, network]);
 

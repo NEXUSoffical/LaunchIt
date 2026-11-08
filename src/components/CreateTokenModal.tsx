@@ -84,11 +84,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
     e.preventDefault();
     if (!name || !symbol) return;
 
-    const initialBuy = parseFloat(initialBuySol) || 0;
-    if (initialBuy > balance) {
-      alert(`Insufficient SOL balance! You have ${balance.toFixed(4)} SOL.`);
-      return;
-    }
+    const initialBuy = Math.max(0, parseFloat(initialBuySol) || 0);
 
     setIsSubmitting(true);
     try {
@@ -542,7 +538,7 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <input
                 type="number"
-                step="0.1"
+                step="any"
                 min="0"
                 placeholder="0.0 SOL (Buy tokens in the same launch block)"
                 value={initialBuySol}
