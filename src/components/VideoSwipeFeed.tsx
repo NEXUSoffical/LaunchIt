@@ -4,7 +4,7 @@ import { useWallet } from "../context/WalletContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientCurve } from "../utils/curve";
 import { executeTradeOnChain } from "../services/solanaOnChain";
-import { VideoEmbedCard } from "./VideoEmbedCard";
+import { VideoEmbedCard, setGlobalSound, getGlobalSound } from "./VideoEmbedCard";
 import {
   ChevronUp,
   ChevronDown,
@@ -19,6 +19,8 @@ import {
   Check,
   UserPlus,
   UserCheck,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 interface VideoSwipeFeedProps {
@@ -808,6 +810,13 @@ export const VideoSwipeFeed: React.FC<VideoSwipeFeedProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [globalAudio, setGlobalAudioState] = useState(() => getGlobalSound());
+
+  const handleToggleGlobalAudio = () => {
+    const next = !globalAudio;
+    setGlobalAudioState(next);
+    setGlobalSound(next);
+  };
 
   const scrollToSlide = (targetIdx: number) => {
     const container = containerRef.current;
@@ -867,6 +876,32 @@ export const VideoSwipeFeed: React.FC<VideoSwipeFeedProps> = ({
 
   return (
     <div style={{ position: "relative" }}>
+      {/* Global Feed Audio Toggle Pill */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+        <button
+          type="button"
+          onClick={handleToggleGlobalAudio}
+          style={{
+            background: globalAudio ? "rgba(20, 241, 149, 0.15)" : "rgba(255, 96, 0, 0.15)",
+            border: globalAudio ? "1px solid rgba(20, 241, 149, 0.4)" : "1px solid rgba(255, 96, 0, 0.4)",
+            color: globalAudio ? "var(--solana-green)" : "#ff8c37",
+            borderRadius: "999px",
+            padding: "4px 12px",
+            fontSize: "0.74rem",
+            fontWeight: 800,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+          title={globalAudio ? "Global sound is ON for all videos" : "Sound is muted - click to enable audio for all videos"}
+        >
+          {globalAudio ? <Volume2 size={13} color="var(--solana-green)" /> : <VolumeX size={13} color="#ff8c37" />}
+          <span>All Videos Sound: {globalAudio ? "ON 🔊" : "MUTED 🔇"}</span>
+        </button>
+      </div>
+
       <div
         ref={containerRef}
         onScroll={handleScroll}

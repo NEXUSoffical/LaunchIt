@@ -99,6 +99,29 @@ function parseVideoSource(url: string): ParsedVideo | null {
   return { type: "external", originalUrl: clean };
 }
 
+// Global audio preference across all cards (persisted)
+let globalSoundEnabled = true;
+try {
+  const saved = localStorage.getItem("launchit_sound_on");
+  if (saved !== null) {
+    globalSoundEnabled = saved === "true";
+  }
+} catch (_) {}
+
+const audioListeners = new Set<(enabled: boolean) => void>();
+
+export function setGlobalSound(enabled: boolean) {
+  globalSoundEnabled = enabled;
+  try {
+    localStorage.setItem("launchit_sound_on", String(enabled));
+  } catch (_) {}
+  audioListeners.forEach((fn) => fn(enabled));
+}
+
+export function getGlobalSound(): boolean {
+  return globalSoundEnabled;
+}
+
 export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   token,
   onUpdateToken,
@@ -110,7 +133,8 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isIntersecting, setIsIntersecting] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => getGlobalSound());
+  const [needsGestureToUnmute, setNeedsGestureToUnmute] = useState(false);
 
   const currentVideoUrl = extractVideoUrlFromToken(token);
   const [resolvedTiktokId, setResolvedTiktokId] = useState<string | null>(null);
@@ -119,21 +143,35 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
 
-  // Auto-unmute on first click/interaction if browser temporarily forced muted playback
+  // Sync with global sound setting
   useEffect(() => {
-    const handleFirstInteraction = () => {
-      if (videoRef.current && isMuted) {
+    const handler = (val: boolean) => setSoundOn(val);
+    audioListeners.add(handler);
+    return () => {
+      audioListeners.delete(handler);
+    };
+  }, []);
+
+  // Unlock browser audio context on any user click / tap / key
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (videoRef.current && soundOn) {
         videoRef.current.muted = false;
-        setIsMuted(false);
+        videoRef.current.volume = 1.0;
+        setNeedsGestureToUnmute(false);
       }
     };
-    window.addEventListener("pointerdown", handleFirstInteraction, { once: true });
-    window.addEventListener("keydown", handleFirstInteraction, { once: true });
+    window.addEventListener("click", unlockAudio);
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
     return () => {
-      window.removeEventListener("pointerdown", handleFirstInteraction);
-      window.removeEventListener("keydown", handleFirstInteraction);
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
     };
-  }, [isMuted]);
+  }, [soundOn]);
 
   // IntersectionObserver to detect when video scrolls into/out of view
   useEffect(() => {
@@ -164,27 +202,33 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
     if (!video) return;
 
     if (shouldPlay) {
-      video.muted = isMuted;
+      video.muted = !soundOn;
+      video.volume = 1.0;
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise.catch(() => {
-          // If browser security strictly blocks sound before first gesture, fallback to muted so it still loops
-          video.muted = true;
-          setIsMuted(true);
-          video.play().catch(() => {});
+          // If browser policy strictly blocked initial sound before any user interaction,
+          // play with temporary muted attribute and show unlock prompt until first gesture
+          if (soundOn) {
+            video.muted = true;
+            setNeedsGestureToUnmute(true);
+            video.play().catch(() => {});
+          }
         });
       }
     } else {
       video.pause();
     }
-  }, [shouldPlay, isMuted]);
+  }, [shouldPlay, soundOn]);
 
-  const toggleMute = (e: React.MouseEvent) => {
+  const toggleSound = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
+    const next = !soundOn;
+    setGlobalSound(next);
+    setNeedsGestureToUnmute(false);
     if (videoRef.current) {
-      videoRef.current.muted = nextMuted;
+      videoRef.current.muted = !next;
+      videoRef.current.volume = 1.0;
       if (videoRef.current.paused && shouldPlay) {
         videoRef.current.play().catch(() => {});
       }
@@ -582,7 +626,6 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
                 autoPlay
                 playsInline
                 loop
-                muted={isMuted}
                 controls
                 style={{
                   width: "100%",
@@ -594,15 +637,15 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
               />
               <button
                 type="button"
-                onClick={toggleMute}
+                onClick={toggleSound}
                 style={{
                   position: "absolute",
                   bottom: "48px",
                   right: "12px",
-                  background: isMuted ? "rgba(255, 96, 0, 0.9)" : "rgba(20, 241, 149, 0.9)",
+                  background: !soundOn || needsGestureToUnmute ? "rgba(255, 96, 0, 0.9)" : "rgba(20, 241, 149, 0.9)",
                   backdropFilter: "blur(6px)",
                   border: "1px solid rgba(255, 255, 255, 0.25)",
-                  color: isMuted ? "#ffffff" : "#05070e",
+                  color: !soundOn || needsGestureToUnmute ? "#ffffff" : "#05070e",
                   borderRadius: "999px",
                   padding: "5px 12px",
                   fontSize: "0.74rem",
@@ -614,12 +657,12 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
                   zIndex: 10,
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
                 }}
-                title={isMuted ? "Click to unmute sound" : "Sound is ON - Click to mute"}
+                title={!soundOn || needsGestureToUnmute ? "Click to unmute sound" : "Sound is ON - Click to mute"}
               >
-                {isMuted ? (
+                {!soundOn || needsGestureToUnmute ? (
                   <>
                     <VolumeX size={14} color="#ffffff" />
-                    <span>🔇 Muted (Click for Sound)</span>
+                    <span>🔇 Click for Sound</span>
                   </>
                 ) : (
                   <>
