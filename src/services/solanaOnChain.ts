@@ -49,19 +49,12 @@ export function getInjectedSolanaProvider(): any {
 
 export function createMemoInstruction(
   memoText: string,
-  signer: PublicKey,
-  extraIndexKeys: PublicKey[] = []
+  signer: PublicKey
 ): TransactionInstruction {
   const data = new TextEncoder().encode(memoText);
+  // IMPORTANT: SPL Memo v2 (MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr) requires EVERY account
+  // in `keys` to be a signer (isSigner: true), otherwise simulation fails with "missing required signature".
   const keys = [{ pubkey: signer, isSigner: true, isWritable: false }];
-  if (!signer.equals(LAUNCHIT_TREASURY_PUBKEY)) {
-    keys.push({ pubkey: LAUNCHIT_TREASURY_PUBKEY, isSigner: false, isWritable: false });
-  }
-  for (const extra of extraIndexKeys) {
-    if (!keys.some((k) => k.pubkey.equals(extra))) {
-      keys.push({ pubkey: extra, isSigner: false, isWritable: false });
-    }
-  }
   return new TransactionInstruction({
     keys,
     programId: MEMO_PROGRAM_ID,
@@ -227,10 +220,14 @@ export async function deployTokenOnChain(params: {
   });
 
   // If initialBuySol > 0, route the initial buy (0.5% Platform Treasury + 99.5% Bonding Curve Reserve)
-  if (initialBuyLamports > 0 && userLamports > initialBuyLamports + 10_000) {
-    const platformFeeLamports = Math.floor(initialBuyLamports * 0.005);
-    const reserveLamports = Math.max(0, initialBuyLamports - platformFeeLamports);
-    if (platformFeeLamports > 0) {
+  // Ensure we leave at least 0.001 SOL in the user's wallet for Solana rent-exemption & base tx fee
+  const maxSafeBuyLamports = Math.max(0, userLamports - 1_000_000);
+  const safeBuyLamports = Math.min(initialBuyLamports, maxSafeBuyLamports);
+
+  if (safeBuyLamports > 0) {
+    const platformFeeLamports = Math.floor(safeBuyLamports * 0.005);
+    const reserveLamports = Math.max(0, safeBuyLamports - platformFeeLamports);
+    if (platformFeeLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
       tx.add(
         SystemProgram.transfer({
           fromPubkey: payerPubkey,
@@ -248,10 +245,18 @@ export async function deployTokenOnChain(params: {
         })
       );
     }
+  } else if (!payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
+    // 0-lamport transfer so LAUNCHIT_TREASURY_PUBKEY indexes this launch transaction on-chain without needing to sign
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: payerPubkey,
+        toPubkey: LAUNCHIT_TREASURY_PUBKEY,
+        lamports: 0,
+      })
+    );
   }
 
   // Record the LaunchIt token metadata & "...Launchit" vanity CA permanently on-chain via Solana Memo
-  // Including mintPubkey in the instruction keys ensures Solscan indexes all launches and trades under the "...Launchit" CA!
   const memoPayload = JSON.stringify({
     p: "launchit.world",
     op: "launch",
@@ -264,7 +269,7 @@ export async function deployTokenOnChain(params: {
     img: params.uri && params.uri.startsWith("http") ? params.uri.slice(0, 120) : undefined,
     buy: params.initialBuySol > 0 ? Number(params.initialBuySol.toFixed(4)) : 0,
   });
-  tx.add(createMemoInstruction(memoPayload, payerPubkey, [mintPubkey]));
+  tx.add(createMemoInstruction(memoPayload, payerPubkey));
 
   // Sign & Broadcast via Phantom / Solflare
   let signature = "";
@@ -401,11 +406,7 @@ export async function executeTradeOnChain(params: {
     sol: Number(params.solAmount.toFixed(6)),
     tokens: Math.round(params.tokenAmount),
   });
-  let mintIndexKeys: PublicKey[] = [];
-  try {
-    mintIndexKeys = [new PublicKey(params.mintAddress)];
-  } catch (_) {}
-  tx.add(createMemoInstruction(memoPayload, payerPubkey, mintIndexKeys));
+  tx.add(createMemoInstruction(memoPayload, payerPubkey));
 
   let signature = "";
   if (typeof provider.signAndSendTransaction === "function") {
