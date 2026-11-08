@@ -79,15 +79,6 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           return;
         }
 
-        if (solVal > balance) {
-          setStatusMsg({
-            type: "error",
-            text: `Insufficient SOL balance (You have ${balance.toFixed(3)} SOL)`,
-          });
-          setIsSwapping(false);
-          return;
-        }
-
         const tokensReceived = Math.round(buyQuote.tokensOut || 0);
 
         // Prompt Phantom / Solflare to sign & send the real on-chain Buy transaction

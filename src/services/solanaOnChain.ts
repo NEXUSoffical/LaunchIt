@@ -331,6 +331,7 @@ export async function executeTradeOnChain(params: {
   const payerPubkey: PublicKey = provider.publicKey;
   const connection = await getWorkingConnection(params.network);
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  const userLamports = await connection.getBalance(payerPubkey);
 
   const tx = new Transaction({
     recentBlockhash: blockhash,
@@ -338,13 +339,17 @@ export async function executeTradeOnChain(params: {
   });
 
   if (params.mode === "buy") {
-    const totalLamports = Math.floor(params.solAmount * LAMPORTS_PER_SOL);
+    const requestedLamports = Math.floor(params.solAmount * LAMPORTS_PER_SOL);
+    // Automatically cap transfer to available wallet lamports (leaving ~0.001 SOL for Solana rent & base tx fee)
+    const maxTransferableLamports = Math.max(0, userLamports - 1_000_000);
+    const totalLamports = Math.min(requestedLamports, maxTransferableLamports);
+
     const platformFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% LaunchIt Platform Treasury Fee
     const launcherFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% Coin Launcher Royalty
     const curveReserveLamports = Math.max(0, totalLamports - platformFeeLamports - launcherFeeLamports);
 
     // 1. Send 0.5% Platform Fee directly to LaunchIt Treasury (EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V)
-    if (platformFeeLamports > 0) {
+    if (platformFeeLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
       tx.add(
         SystemProgram.transfer({
           fromPubkey: payerPubkey,
@@ -358,13 +363,15 @@ export async function executeTradeOnChain(params: {
     if (params.launcherWallet && launcherFeeLamports > 0) {
       try {
         const launcherPubkey = new PublicKey(params.launcherWallet);
-        tx.add(
-          SystemProgram.transfer({
-            fromPubkey: payerPubkey,
-            toPubkey: launcherPubkey,
-            lamports: launcherFeeLamports,
-          })
-        );
+        if (!payerPubkey.equals(launcherPubkey)) {
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: payerPubkey,
+              toPubkey: launcherPubkey,
+              lamports: launcherFeeLamports,
+            })
+          );
+        }
       } catch (_) {}
     }
 
@@ -385,9 +392,10 @@ export async function executeTradeOnChain(params: {
     }
   } else {
     // Sell: route 0.5% Platform Fee to LaunchIt Treasury + 0.5% Coin Launcher Royalty
-    const totalSellLamports = Math.floor(params.solAmount * LAMPORTS_PER_SOL);
+    const maxTransferableLamports = Math.max(0, userLamports - 1_000_000);
+    const totalSellLamports = Math.min(Math.floor(params.solAmount * LAMPORTS_PER_SOL), maxTransferableLamports);
     const platformFeeLamports = Math.floor(totalSellLamports * 0.005);
-    if (platformFeeLamports > 0) {
+    if (platformFeeLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
       tx.add(
         SystemProgram.transfer({
           fromPubkey: payerPubkey,

@@ -54,7 +54,7 @@ const SlideTradePanel: React.FC<{
   } = useWallet();
 
   const [isBuy, setIsBuy] = useState(true);
-  const [amountStr, setAmountStr] = useState("0.1");
+  const [amountStr, setAmountStr] = useState("0.01");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -112,10 +112,6 @@ const SlideTradePanel: React.FC<{
       isTokenGraduated
     );
 
-    if (isBuy && tradeAmount > balance) {
-      alert(`Insufficient SOL balance (You have ${balance.toFixed(3)} SOL).`);
-      return;
-    }
     if (!isBuy && tradeAmount > userTokenBal) {
       alert(`Insufficient $${token.symbol} balance.`);
       return;
@@ -580,31 +576,31 @@ const SlideTradePanel: React.FC<{
         {isBuy && (
           <div style={{ marginBottom: "12px" }}>
             <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 600 }}>
-              ⚡ 1-CLICK INSTANT BUY (WHILE WATCHING):
+              ⚡ 1-CLICK INSTANT BUY (ANY AMOUNT):
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
-              {[0.05, 0.1, 0.5, 1].map((preset) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px" }}>
+              {[0.01, 0.025, 0.05, 0.1, 0.5].map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => executeQuickTrade(preset)}
                   style={{
-                    padding: "8px 6px",
+                    padding: "8px 4px",
                     borderRadius: "8px",
                     background: "linear-gradient(135deg, rgba(20, 241, 149, 0.16), rgba(255, 96, 0, 0.16))",
                     border: "1px solid rgba(20, 241, 149, 0.4)",
                     color: "#ffffff",
-                    fontSize: "0.78rem",
+                    fontSize: "0.74rem",
                     fontWeight: 800,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "3px",
+                    gap: "2px",
                   }}
                 >
-                  <Zap size={12} color="var(--solana-green)" />
+                  <Zap size={11} color="var(--solana-green)" />
                   <span>{preset} SOL</span>
                 </button>
               ))}
