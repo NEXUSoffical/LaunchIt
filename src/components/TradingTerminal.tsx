@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { Token, Trade } from "../types";
 import { PriceChart } from "./PriceChart";
 import { BondingCurveMeter } from "./BondingCurveMeter";
 import { SwapWidget } from "./SwapWidget";
 import { TradeHistory } from "./TradeHistory";
 import { HolderDistribution } from "./HolderDistribution";
-import { ArrowLeft, Copy, ExternalLink, Globe, Twitter, Send } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, Globe, Twitter, Send, Edit3, Check, X } from "lucide-react";
 
 import { CreatorRoyaltyVault } from "./CreatorRoyaltyVault";
 import { CoinCommunityHub } from "./CoinCommunityHub";
@@ -48,6 +48,34 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
 
   const copyToClipboard = (text: string) => {
     if (text) navigator.clipboard.writeText(text);
+  };
+
+  const [isEditingSocials, setIsEditingSocials] = useState(false);
+  const [twitterInput, setTwitterInput] = useState(safeToken.socials?.twitter || "");
+  const [tgInput, setTgInput] = useState(safeToken.socials?.telegram || "");
+  const [webInput, setWebInput] = useState(safeToken.socials?.website || "");
+
+  const normalizeSocialUrl = (url: string, prefix: string): string | undefined => {
+    const clean = url.trim();
+    if (!clean) return undefined;
+    if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+    return `${prefix}${clean.replace(/^@/, "")}`;
+  };
+
+  const handleSaveSocials = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: Token = {
+      ...safeToken,
+      socials: {
+        twitter: normalizeSocialUrl(twitterInput, "https://x.com/"),
+        telegram: normalizeSocialUrl(tgInput, "https://t.me/"),
+        website: normalizeSocialUrl(webInput, "https://"),
+      },
+    };
+    if (onUpdateToken) {
+      onUpdateToken(updated);
+    }
+    setIsEditingSocials(false);
   };
 
   const handleVaultUpdate = (updatedToken: Token) => {
@@ -116,18 +144,29 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
           </div>
         </div>
 
-        {/* Social Links */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
+        {/* Social Links & Edit Button */}
+        <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           {safeToken.socials?.website && (
             <a
               href={safeToken.socials.website}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary"
-              style={{ padding: "6px 10px", fontSize: "0.75rem" }}
+              style={{
+                padding: "6px 12px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--solana-green)",
+                border: "1px solid rgba(20, 241, 149, 0.4)",
+                textDecoration: "none",
+              }}
+              title="Official Website"
             >
-              <Globe size={14} />
+              <Globe size={14} color="var(--solana-green)" />
               <span>Website</span>
+              <ExternalLink size={11} color="var(--text-muted)" />
             </a>
           )}
           {safeToken.socials?.twitter && (
@@ -136,10 +175,21 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary"
-              style={{ padding: "6px 10px", fontSize: "0.75rem" }}
+              style={{
+                padding: "6px 12px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "#1d9bf0",
+                border: "1px solid rgba(29, 155, 240, 0.4)",
+                textDecoration: "none",
+              }}
+              title="Official X / Twitter"
             >
-              <Twitter size={14} />
-              <span>Twitter</span>
+              <Twitter size={14} color="#1d9bf0" />
+              <span>𝕏 Twitter</span>
+              <ExternalLink size={11} color="var(--text-muted)" />
             </a>
           )}
           {safeToken.socials?.telegram && (
@@ -148,14 +198,136 @@ export const TradingTerminal: React.FC<TradingTerminalProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary"
-              style={{ padding: "6px 10px", fontSize: "0.75rem" }}
+              style={{
+                padding: "6px 12px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "#0088cc",
+                border: "1px solid rgba(0, 136, 204, 0.4)",
+                textDecoration: "none",
+              }}
+              title="Official Telegram"
             >
-              <Send size={14} />
+              <Send size={14} color="#0088cc" />
               <span>Telegram</span>
+              <ExternalLink size={11} color="var(--text-muted)" />
             </a>
+          )}
+
+          {onUpdateToken && (
+            <button
+              type="button"
+              onClick={() => {
+                setTwitterInput(safeToken.socials?.twitter || "");
+                setTgInput(safeToken.socials?.telegram || "");
+                setWebInput(safeToken.socials?.website || "");
+                setIsEditingSocials(!isEditingSocials);
+              }}
+              className="btn-secondary"
+              style={{
+                padding: "6px 10px",
+                fontSize: "0.74rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                color: "#ff8c37",
+                border: "1px solid rgba(255, 140, 55, 0.4)",
+              }}
+              title="Add or Edit Community Social Links"
+            >
+              <Edit3 size={12} color="#ff8c37" />
+              <span>{isEditingSocials ? "Cancel" : "+ Edit Links"}</span>
+            </button>
           )}
         </div>
       </div>
+
+      {/* Inline Social Editor Panel */}
+      {isEditingSocials && (
+        <form
+          onSubmit={handleSaveSocials}
+          style={{
+            background: "linear-gradient(180deg, rgba(22, 25, 36, 0.98), rgba(14, 17, 26, 0.98))",
+            border: "1px solid rgba(255, 140, 55, 0.45)",
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.6)",
+            borderRadius: "12px",
+            padding: "16px",
+            marginBottom: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#fff" }}>
+              Update Official Social Links for ${safeToken.symbol}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsEditingSocials(false)}
+              style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "8px 12px" }}>
+              <Twitter size={15} color="#1d9bf0" />
+              <input
+                type="text"
+                placeholder="𝕏 / Twitter (e.g. @handle or https://x.com/...)"
+                value={twitterInput}
+                onChange={(e) => setTwitterInput(e.target.value)}
+                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "0.82rem" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "8px 12px" }}>
+              <Send size={15} color="#0088cc" />
+              <input
+                type="text"
+                placeholder="Telegram (e.g. @group or https://t.me/...)"
+                value={tgInput}
+                onChange={(e) => setTgInput(e.target.value)}
+                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "0.82rem" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "8px 12px" }}>
+              <Globe size={15} color="var(--solana-green)" />
+              <input
+                type="text"
+                placeholder="Website (e.g. https://yourcoin.com)"
+                value={webInput}
+                onChange={(e) => setWebInput(e.target.value)}
+                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "0.82rem" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setIsEditingSocials(false)}
+              className="btn-secondary"
+              style={{ padding: "6px 14px", fontSize: "0.78rem" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{ padding: "6px 16px", fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px" }}
+            >
+              <Check size={14} />
+              <span>Save & Link Socials</span>
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Creator Royalty Escrow Vault */}
       <div style={{ marginBottom: "20px" }}>

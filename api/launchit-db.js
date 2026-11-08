@@ -244,6 +244,13 @@ const OFFICIAL_LAUNCHIT_MINT = "4akoUeUJcay3tQUc3BJbqGtaCwPanZ12xm7dLaunchit";
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,90}$/;
 
 function sortTokensWithOfficialFirst(tokens) {
+  for (const t of tokens) {
+    if (t.mint === OFFICIAL_LAUNCHIT_MINT || String(t.symbol || "").trim().toUpperCase() === "LAUNCHIT") {
+      if (!t.socials) t.socials = {};
+      if (!t.socials.website) t.socials.website = "https://www.launchit.world";
+      if (!t.socials.twitter) t.socials.twitter = "https://x.com/seeItLaunchIt";
+    }
+  }
   tokens.sort((a, b) => {
     const aPin = a.mint === OFFICIAL_LAUNCHIT_MINT || String(a.symbol || "").trim().toUpperCase() === "LAUNCHIT";
     const bPin = b.mint === OFFICIAL_LAUNCHIT_MINT || String(b.symbol || "").trim().toUpperCase() === "LAUNCHIT";
@@ -359,10 +366,10 @@ function sanitizeIncomingToken(incoming, existing = null) {
     likes: Array.isArray(incoming.likes) ? sanitizeLikes(incoming.likes) : sanitizeLikes(existing?.likes),
     isGraduated: Boolean(existing?.isGraduated || safeSolReserves >= 85),
     createdAt: existing?.createdAt || Number(incoming.createdAt) || Date.now(),
-    socials: existing?.socials || {
-      twitter: sanitizeSafeUrl(incoming.socials?.twitter, undefined),
-      telegram: sanitizeSafeUrl(incoming.socials?.telegram, undefined),
-      website: sanitizeSafeUrl(incoming.socials?.website, undefined),
+    socials: {
+      twitter: sanitizeSafeUrl(incoming.socials?.twitter, existing?.socials?.twitter),
+      telegram: sanitizeSafeUrl(incoming.socials?.telegram, existing?.socials?.telegram),
+      website: sanitizeSafeUrl(incoming.socials?.website, existing?.socials?.website),
     },
   };
 }

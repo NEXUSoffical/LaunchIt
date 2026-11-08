@@ -4,13 +4,34 @@ import { useWallet } from "../context/WalletContext";
 import { useAuth } from "../context/AuthContext";
 import { ClientCurve } from "../utils/curve";
 import { deployTokenOnChain } from "../services/solanaOnChain";
-import { X, Zap, Video, Link2, Share2, CheckCircle2 } from "lucide-react";
+import { X, Zap, Video, Link2, Share2, CheckCircle2, Twitter, Globe, Send } from "lucide-react";
 
 interface CreateTokenModalProps {
   isOpen: boolean;
   onClose: () => void;
   onTokenCreated: (token: Token) => void;
 }
+
+const normalizeTwitter = (val: string): string | undefined => {
+  const clean = val.trim();
+  if (!clean) return undefined;
+  if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+  return `https://x.com/${clean.replace(/^@/, "")}`;
+};
+
+const normalizeTelegram = (val: string): string | undefined => {
+  const clean = val.trim();
+  if (!clean) return undefined;
+  if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+  return `https://t.me/${clean.replace(/^@/, "")}`;
+};
+
+const normalizeWebsite = (val: string): string | undefined => {
+  const clean = val.trim();
+  if (!clean) return undefined;
+  if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+  return `https://${clean}`;
+};
 
 export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
   isOpen,
@@ -148,9 +169,9 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
         isGraduated: false,
         createdAt: Date.now(),
         socials: {
-          twitter: twitter || undefined,
-          telegram: telegram || undefined,
-          website: website || videoUrl || undefined,
+          twitter: normalizeTwitter(twitter),
+          telegram: normalizeTelegram(telegram),
+          website: normalizeWebsite(website) || (videoUrl ? videoUrl : undefined),
         },
       };
 
@@ -536,6 +557,83 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
                   fontSize: "0.85rem",
                 }}
               />
+            </div>
+          </div>
+
+          {/* Social & Community Links (X / Twitter, Telegram, Website) */}
+          <div
+            style={{
+              padding: "12px",
+              background: "rgba(255, 255, 255, 0.02)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-subtle)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#cbd5e1", display: "flex", alignItems: "center", gap: "6px" }}>
+              <Share2 size={14} color="#ff8c37" />
+              <span>Community & Social Links (Clickable on Coin Page)</span>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px" }}>
+              {/* X / Twitter */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", padding: "7px 10px" }}>
+                <Twitter size={15} color="#1d9bf0" />
+                <input
+                  type="text"
+                  placeholder="𝕏 / Twitter link or @handle (e.g. https://x.com/... or @coin)"
+                  value={twitter}
+                  onChange={(e) => setTwitter(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    color: "#ffffff",
+                    fontSize: "0.84rem",
+                  }}
+                />
+              </div>
+
+              {/* Telegram */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", padding: "7px 10px" }}>
+                <Send size={15} color="#0088cc" />
+                <input
+                  type="text"
+                  placeholder="Telegram link or @group (e.g. https://t.me/... or @community)"
+                  value={telegram}
+                  onChange={(e) => setTelegram(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    color: "#ffffff",
+                    fontSize: "0.84rem",
+                  }}
+                />
+              </div>
+
+              {/* Website */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", padding: "7px 10px" }}>
+                <Globe size={15} color="var(--solana-green)" />
+                <input
+                  type="text"
+                  placeholder="Official Website URL (e.g. https://yourcoin.world)"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    color: "#ffffff",
+                    fontSize: "0.84rem",
+                  }}
+                />
+              </div>
             </div>
           </div>
 

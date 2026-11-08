@@ -1,6 +1,6 @@
 import React from "react";
 import { Token } from "../types";
-import { CheckCircle2, TrendingUp, MessageSquare, Heart, UserPlus, UserCheck } from "lucide-react";
+import { CheckCircle2, TrendingUp, MessageSquare, Heart, UserPlus, UserCheck, Globe, Send } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 interface TokenCardProps {
@@ -197,6 +197,92 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
           />
         </div>
       </div>
+
+      {/* Clickable Socials on Card */}
+      {(token.socials?.twitter || token.socials?.telegram || token.socials?.website) && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            flexWrap: "wrap",
+            paddingTop: "2px",
+          }}
+        >
+          {token.socials.twitter && (
+            <a
+              href={token.socials.twitter}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: "rgba(29, 155, 240, 0.12)",
+                border: "1px solid rgba(29, 155, 240, 0.35)",
+                borderRadius: "6px",
+                padding: "2px 7px",
+                color: "#1d9bf0",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "3px",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+              title="Open X / Twitter"
+            >
+              <span>𝕏</span>
+            </a>
+          )}
+          {token.socials.telegram && (
+            <a
+              href={token.socials.telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: "rgba(0, 136, 204, 0.12)",
+                border: "1px solid rgba(0, 136, 204, 0.35)",
+                borderRadius: "6px",
+                padding: "2px 7px",
+                color: "#0088cc",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "3px",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+              title="Open Telegram"
+            >
+              <Send size={10} />
+              <span>TG</span>
+            </a>
+          )}
+          {token.socials.website && (
+            <a
+              href={token.socials.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: "rgba(20, 241, 149, 0.1)",
+                border: "1px solid rgba(20, 241, 149, 0.3)",
+                borderRadius: "6px",
+                padding: "2px 7px",
+                color: "var(--solana-green)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "3px",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+              title="Open Website"
+            >
+              <Globe size={10} />
+              <span>Web</span>
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Footer stats */}
       <div

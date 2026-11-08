@@ -21,6 +21,8 @@ import {
   UserCheck,
   Volume2,
   VolumeX,
+  Globe,
+  Send,
 } from "lucide-react";
 
 interface VideoSwipeFeedProps {
@@ -399,6 +401,82 @@ const SlideTradePanel: React.FC<{
                   <span>Solscan</span>
                   <ExternalLink size={11} />
                 </a>
+
+                {/* Clickable Socials: X, Telegram, Website */}
+                {token.socials?.twitter && (
+                  <a
+                    href={token.socials.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      background: "rgba(29, 155, 240, 0.15)",
+                      border: "1px solid rgba(29, 155, 240, 0.45)",
+                      borderRadius: "6px",
+                      padding: "3px 8px",
+                      color: "#1d9bf0",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                    title="Open official X (Twitter)"
+                  >
+                    <span>𝕏</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+                {token.socials?.telegram && (
+                  <a
+                    href={token.socials.telegram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      background: "rgba(0, 136, 204, 0.15)",
+                      border: "1px solid rgba(0, 136, 204, 0.45)",
+                      borderRadius: "6px",
+                      padding: "3px 8px",
+                      color: "#0088cc",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                    title="Open official Telegram"
+                  >
+                    <Send size={11} />
+                    <span>Telegram</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+                {token.socials?.website && (
+                  <a
+                    href={token.socials.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      background: "rgba(20, 241, 149, 0.12)",
+                      border: "1px solid rgba(20, 241, 149, 0.4)",
+                      borderRadius: "6px",
+                      padding: "3px 8px",
+                      color: "var(--solana-green)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                    title="Open official Website"
+                  >
+                    <Globe size={11} />
+                    <span>Website</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
               </div>
             </div>
           </div>
