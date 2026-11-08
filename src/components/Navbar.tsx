@@ -14,6 +14,8 @@ import {
   ExternalLink,
   CheckCircle2,
   X,
+  Gift,
+  Users,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -22,12 +24,14 @@ interface NavbarProps {
   onHomeClick: () => void;
   onOpenExplorer?: (query?: string) => void;
   isExplorerActive?: boolean;
+  onOpenReferral?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenCreate,
   onOpenGuide,
   onHomeClick,
+  onOpenReferral,
 }) => {
   const { currentUser, logout, updateProfile } = useAuth();
   const {
@@ -248,6 +252,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>How It Works</span>
           </button>
 
+          {onOpenReferral && (
+            <button
+              onClick={onOpenReferral}
+              className="btn-secondary"
+              style={{
+                fontSize: "0.85rem",
+                padding: "8px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(255, 140, 55, 0.12)",
+                border: "1px solid rgba(255, 140, 55, 0.4)",
+                color: "#ff8c37",
+                fontWeight: 700,
+              }}
+              title="Invite friends & earn 20% on-chain trading fees"
+            >
+              <Gift size={16} color="#ff8c37" />
+              <span>Refer & Earn</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenCreate}
             className="btn-primary"
@@ -421,7 +447,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </div>
                     </div>
 
-                    {/* Stats */}
+                    {/* Stats Grid: Balance, Karma, Following, Followers */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", background: "rgba(255, 255, 255, 0.03)", padding: "10px", borderRadius: "8px" }}>
                       <div>
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block" }}>Solana Balance</span>
@@ -435,6 +461,62 @@ export const Navbar: React.FC<NavbarProps> = ({
                           {currentUser.reputationKarma || 100} Karma
                         </span>
                       </div>
+                      <div>
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block" }}>Following</span>
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--solana-cyan)" }}>
+                          {currentUser.following?.length || 0}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block" }}>Followers</span>
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fbbf24" }}>
+                          {currentUser.followersCount || 0}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Referrals Banner in Profile */}
+                    <div
+                      style={{
+                        background: "linear-gradient(135deg, rgba(255, 140, 55, 0.12), rgba(20, 241, 149, 0.08))",
+                        border: "1px solid rgba(255, 140, 55, 0.3)",
+                        borderRadius: "10px",
+                        padding: "10px 12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Referral Rewards</div>
+                        <div className="mono" style={{ fontSize: "0.88rem", fontWeight: 800, color: "var(--solana-green)" }}>
+                          {(currentUser.referralEarningsSol || 0).toFixed(4)} SOL
+                        </div>
+                      </div>
+                      {onOpenReferral && (
+                        <button
+                          onClick={() => {
+                            setIsProfileOpen(false);
+                            onOpenReferral();
+                          }}
+                          style={{
+                            background: "rgba(255, 140, 55, 0.2)",
+                            border: "1px solid rgba(255, 140, 55, 0.45)",
+                            color: "#ff8c37",
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <Gift size={12} />
+                          <span>Invite Link</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Wallet Details */}

@@ -317,48 +317,86 @@ export const CreateTokenModal: React.FC<CreateTokenModalProps> = ({
                 />
               </div>
 
-              <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const rocketUrl = "https://www.launchit.world/launchit-rocket.mp4";
-                    setVideoUrl(rocketUrl);
-                    if (!name) setName("LaunchIt");
-                    if (!symbol) setSymbol("LAUNCHIT");
-                    if (!description) {
+              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Official Launch Presets (1-Click Fill)
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rocketUrl = "https://www.launchit.world/launchit-rocket.mp4";
+                      setVideoUrl(rocketUrl);
+                      setName("LaunchIt");
+                      setSymbol("LAUNCHIT");
                       setDescription(
                         "Stop buying boring static pictures. Watch & trade real viral video memes live on Solana at https://www.launchit.world — 0 SOL launch fee, 0.5% launcher royalties."
                       );
-                    }
-                    setPreviewThumbnail("/logo.jpg");
-                    setTwitter("https://x.com/seeItLaunchIt");
-                    setWebsite("https://www.launchit.world");
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "8px",
-                    background: "rgba(255, 96, 0, 0.16)",
-                    border: "1px solid rgba(255, 96, 0, 0.45)",
-                    color: "#ff8c37",
-                    fontSize: "0.76rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                  }}
-                >
-                  🚀 1-Click Fill: Official $LAUNCHIT Rocket Takeoff Video
-                </button>
-                <a
-                  href="/launchit-rocket.mp4"
-                  download="launchit-rocket.mp4"
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--solana-green)",
-                    fontWeight: 700,
-                    textDecoration: "underline",
-                  }}
-                >
-                  ⬇ Download Rocket MP4 for X
-                </a>
+                      setPreviewThumbnail("/logo.jpg");
+                      setTwitter("https://x.com/seeItLaunchIt");
+                      setWebsite("https://www.launchit.world");
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      background: "rgba(255, 96, 0, 0.16)",
+                      border: "1px solid rgba(255, 96, 0, 0.45)",
+                      color: "#ff8c37",
+                      fontSize: "0.76rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span>🚀 $LAUNCHIT Rocket</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoUrl("https://www.launchit.world/memetinder-banner.jpg");
+                      setName("Meme Tinder");
+                      setSymbol("TINDER");
+                      setDescription(
+                        "Swipe right on viral crypto memes. Meme Tinder connects degens to trending memes with instant matches on Solana. Built by LaunchIt creators."
+                      );
+                      setPreviewThumbnail("/memetinder-logo.jpg");
+                      setTwitter("https://x.com/seeItLaunchIt");
+                      setWebsite("https://www.launchit.world");
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      background: "linear-gradient(135deg, rgba(255, 68, 88, 0.22), rgba(254, 60, 114, 0.22))",
+                      border: "1px solid rgba(254, 60, 114, 0.55)",
+                      color: "#ff4458",
+                      fontSize: "0.76rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span>🔥 Meme Tinder ($TINDER)</span>
+                  </button>
+
+                  <a
+                    href="/launchit-rocket.mp4"
+                    download="launchit-rocket.mp4"
+                    style={{
+                      fontSize: "0.74rem",
+                      color: "var(--solana-green)",
+                      fontWeight: 700,
+                      textDecoration: "underline",
+                      marginLeft: "auto",
+                    }}
+                  >
+                    ⬇ Rocket MP4
+                  </a>
+                </div>
               </div>
 
               {detectedPlatform && (

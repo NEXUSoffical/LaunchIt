@@ -1,6 +1,7 @@
 import React from "react";
 import { Token } from "../types";
-import { CheckCircle2, TrendingUp, MessageSquare, Heart } from "lucide-react";
+import { CheckCircle2, TrendingUp, MessageSquare, Heart, UserPlus, UserCheck } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 interface TokenCardProps {
   token: Token;
@@ -8,6 +9,11 @@ interface TokenCardProps {
 }
 
 export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
+  const { currentUser, toggleFollowUser, isFollowingUser } = useAuth();
+  const rawCreator = token.creatorHandle || token.creator || token.launcherHandle || "";
+  const cleanCreator = rawCreator.replace(/^@/, "").trim();
+  const isSelf = currentUser && cleanCreator.toLowerCase() === currentUser.username.toLowerCase();
+  const isFollowing = cleanCreator ? isFollowingUser(cleanCreator) : false;
   return (
     <div
       onClick={() => onSelect(token)}
@@ -76,8 +82,46 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
             {token.name}
           </h3>
 
-          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
-            by {token.creator}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              by {token.creatorHandle || token.creator || "Anonymous"}
+            </span>
+            {cleanCreator && !isSelf && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFollowUser(cleanCreator);
+                }}
+                style={{
+                  background: isFollowing ? "rgba(20, 241, 149, 0.15)" : "rgba(255, 255, 255, 0.08)",
+                  border: isFollowing ? "1px solid rgba(20, 241, 149, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)",
+                  color: isFollowing ? "var(--solana-green)" : "#cbd5e1",
+                  borderRadius: "999px",
+                  padding: "1px 7px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  transition: "all 0.2s ease",
+                }}
+                title={isFollowing ? `Unfollow @${cleanCreator}` : `Follow @${cleanCreator}`}
+              >
+                {isFollowing ? (
+                  <>
+                    <UserCheck size={10} />
+                    <span>Following</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={10} />
+                    <span>Follow</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -316,6 +316,7 @@ export async function executeTradeOnChain(params: {
   tokenAmount: number;
   launcherWallet?: string | null;
   creatorWallet?: string | null;
+  referrerWallet?: string | null;
 }): Promise<{
   txSignature: string;
   updatedBalanceSol: number;
@@ -353,13 +354,33 @@ export async function executeTradeOnChain(params: {
     const launcherFeeLamports = Math.floor(totalLamports * 0.005); // 0.5% Coin Launcher Royalty
     const curveReserveLamports = Math.max(0, totalLamports - platformFeeLamports - launcherFeeLamports);
 
-    // 1. Send 0.5% Platform Fee directly to LaunchIt Treasury (EEjAgWkw5vVgFPvCS31TPhmAXeYjFrSt4awZNfDFsE9V)
-    if (platformFeeLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
+    // 1. Send Platform Fee directly to LaunchIt Treasury, splitting 20% to Referrer if provided
+    let netPlatformLamports = platformFeeLamports;
+    if (params.referrerWallet && platformFeeLamports > 0) {
+      try {
+        const referrerPubkey = new PublicKey(params.referrerWallet);
+        const referrerFeeLamports = Math.floor(platformFeeLamports * 0.20); // 20% of platform fee (0.10% total trade volume)
+        if (referrerFeeLamports > 0 && !payerPubkey.equals(referrerPubkey)) {
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: payerPubkey,
+              toPubkey: referrerPubkey,
+              lamports: referrerFeeLamports,
+            })
+          );
+          netPlatformLamports = Math.max(0, netPlatformLamports - referrerFeeLamports);
+        }
+      } catch (err) {
+        console.warn("Invalid referrer wallet:", err);
+      }
+    }
+
+    if (netPlatformLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
       tx.add(
         SystemProgram.transfer({
           fromPubkey: payerPubkey,
           toPubkey: LAUNCHIT_TREASURY_PUBKEY,
-          lamports: platformFeeLamports,
+          lamports: netPlatformLamports,
         })
       );
     }
@@ -390,16 +411,37 @@ export async function executeTradeOnChain(params: {
       );
     }
   } else {
-    // Sell: route 0.5% Platform Fee to LaunchIt Treasury + 0.5% Coin Launcher Royalty
+    // Sell: route Platform Fee to LaunchIt Treasury + 20% to Referrer if provided
     const maxTransferableLamports = Math.max(0, userLamports - 1_000_000);
     const totalSellLamports = Math.min(Math.floor(params.solAmount * LAMPORTS_PER_SOL), maxTransferableLamports);
     const platformFeeLamports = Math.floor(totalSellLamports * 0.005);
-    if (platformFeeLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
+    let netPlatformLamports = platformFeeLamports;
+
+    if (params.referrerWallet && platformFeeLamports > 0) {
+      try {
+        const referrerPubkey = new PublicKey(params.referrerWallet);
+        const referrerFeeLamports = Math.floor(platformFeeLamports * 0.20);
+        if (referrerFeeLamports > 0 && !payerPubkey.equals(referrerPubkey)) {
+          tx.add(
+            SystemProgram.transfer({
+              fromPubkey: payerPubkey,
+              toPubkey: referrerPubkey,
+              lamports: referrerFeeLamports,
+            })
+          );
+          netPlatformLamports = Math.max(0, netPlatformLamports - referrerFeeLamports);
+        }
+      } catch (err) {
+        console.warn("Invalid referrer wallet:", err);
+      }
+    }
+
+    if (netPlatformLamports > 0 && !payerPubkey.equals(LAUNCHIT_TREASURY_PUBKEY)) {
       tx.add(
         SystemProgram.transfer({
           fromPubkey: payerPubkey,
           toPubkey: LAUNCHIT_TREASURY_PUBKEY,
-          lamports: platformFeeLamports,
+          lamports: netPlatformLamports,
         })
       );
     }

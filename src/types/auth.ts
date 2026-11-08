@@ -11,6 +11,12 @@ export interface UserAccount {
   userTokens?: Record<string, number>;
   createdAt: number;
   reputationKarma: number;
+  following?: string[]; // array of wallet addresses / handles user is following
+  followersCount?: number;
+  referralCode?: string; // unique code for this user
+  referredBy?: string; // referral code of the person who invited them
+  referralEarningsSol?: number; // total SOL earned from invitees trading
+  referralCount?: number; // total users invited
 }
 
 export interface CoinThesis {

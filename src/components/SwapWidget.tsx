@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Token, Trade } from "../types";
 import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../context/AuthContext";
 import { ClientCurve } from "../utils/curve";
 import { executeTradeOnChain } from "../services/solanaOnChain";
 import { Settings, CheckCircle2, AlertCircle, Zap } from "lucide-react";
@@ -15,6 +16,26 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
   onTradeExecuted,
 }) => {
   const { balance, network, userTokens, executeTradeAssets, notifyTx, publicKey } = useWallet();
+  const { currentUser, creditReferralReward } = useAuth();
+
+  const getReferrerWallet = (): string | null => {
+    if (!currentUser?.referredBy) return null;
+    const ref = currentUser.referredBy.trim().replace(/^@/, "").toLowerCase();
+    if (ref.length >= 32 && ref.length <= 44) return ref;
+    try {
+      const raw = localStorage.getItem("launchit_wallet_accounts");
+      if (raw) {
+        const db = JSON.parse(raw);
+        for (const w in db) {
+          const u = db[w];
+          if (u.username?.toLowerCase() === ref || u.referralCode?.toLowerCase() === ref) {
+            return u.solanaWallet || w;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  };
 
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [solAmount, setSolAmount] = useState<string>("0.5");
@@ -91,7 +112,12 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           tokenAmount: tokensReceived,
           launcherWallet: token.launcherWallet,
           creatorWallet: token.creatorWallet,
+          referrerWallet: getReferrerWallet(),
         });
+
+        if (currentUser?.referredBy) {
+          creditReferralReward(currentUser.referredBy, solVal * 0.005 * 0.20);
+        }
 
         executeTradeAssets({
           solDelta: -solVal,
@@ -196,7 +222,12 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
           tokenAmount: actualTokensToSell,
           launcherWallet: token.launcherWallet,
           creatorWallet: token.creatorWallet,
+          referrerWallet: getReferrerWallet(),
         });
+
+        if (currentUser?.referredBy) {
+          creditReferralReward(currentUser.referredBy, solReceived * 0.005 * 0.20);
+        }
 
         executeTradeAssets({
           solDelta: solReceived,

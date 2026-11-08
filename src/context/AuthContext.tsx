@@ -26,6 +26,10 @@ interface AuthContextType {
     tokenDelta?: number;
     setExactToken?: number;
   }) => void;
+  toggleFollowUser: (targetHandleOrWallet: string) => boolean;
+  isFollowingUser: (targetHandleOrWallet: string) => boolean;
+  getReferralLink: () => string;
+  creditReferralReward: (refCodeOrWallet: string, solAmount: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -130,11 +134,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? preferredUsername.trim().replace(/^@/, "").replace(/[^a-zA-Z0-9_]/g, "").toLowerCase()
       : "";
 
+    const savedRef = typeof window !== "undefined" ? localStorage.getItem("launchit_referred_by") : null;
+    let initialReferredBy = existing?.referredBy;
+    if (!initialReferredBy && savedRef && savedRef !== (cleanPreferred || existing?.username || "").toLowerCase()) {
+      initialReferredBy = savedRef;
+      // Bump referral count of referrer in db
+      for (const w in db) {
+        if (db[w].username?.toLowerCase() === savedRef || db[w].referralCode?.toLowerCase() === savedRef) {
+          db[w].referralCount = (db[w].referralCount || 0) + 1;
+          break;
+        }
+      }
+    }
+
     if (existing) {
       const updatedUser: UserAccount = {
         ...existing,
         username: cleanPreferred || existing.username,
         displayName: cleanPreferred || existing.displayName,
+        referredBy: existing.referredBy || initialReferredBy,
+        referralCode: existing.referralCode || (cleanPreferred || existing.username).toLowerCase(),
+        following: existing.following || [],
+        followersCount: existing.followersCount || 0,
+        referralCount: existing.referralCount || 0,
+        referralEarningsSol: existing.referralEarningsSol || 0,
       };
       db[walletAddress] = updatedUser;
       saveStoredWalletAccounts(db);
@@ -143,6 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const handle = cleanPreferred || formatShortWalletHandle(walletAddress);
+    const refCode = handle.toLowerCase();
     const newUser: UserAccount = {
       id: `wallet_${walletAddress}`,
       username: handle,
@@ -154,6 +178,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       userTokens: {},
       createdAt: Date.now(),
       reputationKarma: 100,
+      following: [],
+      followersCount: 0,
+      referralCode: refCode,
+      referredBy: initialReferredBy,
+      referralEarningsSol: 0.0,
+      referralCount: 0,
     };
 
     db[walletAddress] = newUser;
@@ -306,6 +336,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const toggleFollowUser = (targetHandleOrWallet: string): boolean => {
+    if (!currentUser) return false;
+    const cleanTarget = targetHandleOrWallet.trim().replace(/^@/, "").toLowerCase();
+    if (!cleanTarget || cleanTarget === currentUser.username.toLowerCase()) return false;
+
+    const currentFollowing = Array.isArray(currentUser.following) ? currentUser.following : [];
+    const isFollowing = currentFollowing.includes(cleanTarget);
+
+    const updatedFollowing = isFollowing
+      ? currentFollowing.filter((h) => h !== cleanTarget)
+      : [...currentFollowing, cleanTarget];
+
+    // Update target's followersCount in stored accounts if found
+    try {
+      const db = getStoredWalletAccounts();
+      for (const w in db) {
+        const u = db[w];
+        if (w.toLowerCase() === cleanTarget || u.username.toLowerCase() === cleanTarget) {
+          const delta = isFollowing ? -1 : 1;
+          u.followersCount = Math.max(0, (u.followersCount || 0) + delta);
+          db[w] = u;
+          saveStoredWalletAccounts(db);
+          break;
+        }
+      }
+    } catch (_) {}
+
+    updateProfile({ following: updatedFollowing });
+    return !isFollowing;
+  };
+
+  const isFollowingUser = (targetHandleOrWallet: string): boolean => {
+    if (!currentUser || !currentUser.following) return false;
+    const cleanTarget = targetHandleOrWallet.trim().replace(/^@/, "").toLowerCase();
+    return currentUser.following.includes(cleanTarget);
+  };
+
+  const getReferralLink = (): string => {
+    const code = currentUser?.referralCode || currentUser?.username || "alpha";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://www.launchit.world";
+    return `${origin}/?ref=${encodeURIComponent(code)}`;
+  };
+
+  const creditReferralReward = (refCodeOrWallet: string, solAmount: number) => {
+    if (!refCodeOrWallet || solAmount <= 0) return;
+    const clean = refCodeOrWallet.trim().replace(/^@/, "").toLowerCase();
+    try {
+      const db = getStoredWalletAccounts();
+      for (const wallet in db) {
+        const u = db[wallet];
+        if (
+          wallet.toLowerCase() === clean ||
+          u.username?.toLowerCase() === clean ||
+          u.referralCode?.toLowerCase() === clean
+        ) {
+          u.referralEarningsSol = (u.referralEarningsSol || 0) + solAmount;
+          db[wallet] = u;
+          saveStoredWalletAccounts(db);
+
+          if (currentUser && (currentUser.solanaWallet === wallet || currentUser.username.toLowerCase() === clean)) {
+            setCurrentUser({ ...currentUser, referralEarningsSol: u.referralEarningsSol });
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -320,6 +418,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateUserBalance,
         updateUserTokens,
         updateUserAssets,
+        toggleFollowUser,
+        isFollowingUser,
+        getReferralLink,
+        creditReferralReward,
       }}
     >
       {children}

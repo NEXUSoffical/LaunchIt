@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Token, Trade } from "../types";
 import { useWallet } from "../context/WalletContext";
+import { useAuth } from "../context/AuthContext";
 import { ClientCurve } from "../utils/curve";
 import { executeTradeOnChain } from "../services/solanaOnChain";
 import { VideoEmbedCard } from "./VideoEmbedCard";
@@ -16,6 +17,8 @@ import {
   Crown,
   Rocket,
   Check,
+  UserPlus,
+  UserCheck,
 } from "lucide-react";
 
 interface VideoSwipeFeedProps {
@@ -52,6 +55,31 @@ const SlideTradePanel: React.FC<{
     executeTradeAssets,
     notifyTx,
   } = useWallet();
+  const { currentUser, toggleFollowUser, isFollowingUser, creditReferralReward } = useAuth();
+
+  const rawCreator = token.creatorHandle || token.creator || token.launcherHandle || "";
+  const cleanCreator = rawCreator.replace(/^@/, "").trim();
+  const isSelf = currentUser && cleanCreator.toLowerCase() === currentUser.username.toLowerCase();
+  const isFollowing = cleanCreator ? isFollowingUser(cleanCreator) : false;
+
+  const getReferrerWallet = (): string | null => {
+    if (!currentUser?.referredBy) return null;
+    const ref = currentUser.referredBy.trim().replace(/^@/, "").toLowerCase();
+    if (ref.length >= 32 && ref.length <= 44) return ref;
+    try {
+      const raw = localStorage.getItem("launchit_wallet_accounts");
+      if (raw) {
+        const db = JSON.parse(raw);
+        for (const w in db) {
+          const u = db[w];
+          if (u.username?.toLowerCase() === ref || u.referralCode?.toLowerCase() === ref) {
+            return u.solanaWallet || w;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  };
 
   const [isBuy, setIsBuy] = useState(true);
   const [amountStr, setAmountStr] = useState("0.01");
@@ -132,7 +160,12 @@ const SlideTradePanel: React.FC<{
         tokenAmount: tokensTraded,
         launcherWallet: token.launcherWallet,
         creatorWallet: token.creatorWallet,
+        referrerWallet: getReferrerWallet(),
       });
+
+      if (currentUser?.referredBy) {
+        creditReferralReward(currentUser.referredBy, solTraded * 0.005 * 0.20);
+      }
 
       executeTradeAssets({
         solDelta: isBuy ? -tradeAmount : solTraded,
@@ -270,8 +303,46 @@ const SlideTradePanel: React.FC<{
                   </span>
                 )}
                 {token.creatorHandle && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--solana-cyan)", fontWeight: 600 }}>
-                    • {token.creatorHandle.startsWith("@") ? token.creatorHandle : `@${token.creatorHandle}`}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--solana-cyan)", fontWeight: 600 }}>
+                      • {token.creatorHandle.startsWith("@") ? token.creatorHandle : `@${token.creatorHandle}`}
+                    </span>
+                    {cleanCreator && !isSelf && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFollowUser(cleanCreator);
+                        }}
+                        style={{
+                          background: isFollowing ? "rgba(20, 241, 149, 0.15)" : "rgba(255, 255, 255, 0.08)",
+                          border: isFollowing ? "1px solid rgba(20, 241, 149, 0.4)" : "1px solid rgba(255, 255, 255, 0.15)",
+                          color: isFollowing ? "var(--solana-green)" : "#cbd5e1",
+                          borderRadius: "999px",
+                          padding: "1px 7px",
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          transition: "all 0.2s ease",
+                        }}
+                        title={isFollowing ? `Unfollow @${cleanCreator}` : `Follow @${cleanCreator}`}
+                      >
+                        {isFollowing ? (
+                          <>
+                            <UserCheck size={10} />
+                            <span>Following</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus size={10} />
+                            <span>Follow</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </span>
                 )}
               </div>

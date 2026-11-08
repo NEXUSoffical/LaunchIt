@@ -7,6 +7,7 @@ import { TokenGrid } from "./components/TokenGrid";
 import { TradingTerminal } from "./components/TradingTerminal";
 import { CreateTokenModal } from "./components/CreateTokenModal";
 import { DeployGuideModal } from "./components/DeployGuideModal";
+import { ReferralModal } from "./components/ReferralModal";
 import { LandingHomePage } from "./components/LandingHomePage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAuth } from "./context/AuthContext";
@@ -84,6 +85,15 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
   // Check URL parameters synchronously on page load
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
+    const refParam = params.get("ref");
+    if (refParam) {
+      const cleanRef = safeDecode(refParam).trim().replace(/^@/, "").toLowerCase();
+      if (cleanRef) {
+        try {
+          localStorage.setItem("launchit_referred_by", cleanRef);
+        } catch (_) {}
+      }
+    }
     const newMint = params.get("mint") || params.get("token");
     const newName = params.get("name");
     const newSymbol = params.get("symbol");
@@ -174,6 +184,7 @@ export const App: React.FC = () => {
   const [selectedToken, setSelectedToken] = useState<Token | null>(parsedState.initialSelected);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isReferralOpen, setIsReferralOpen] = useState(false);
 
   // Sync with localStorage whenever tokens or trades change
   useEffect(() => {
@@ -320,6 +331,7 @@ export const App: React.FC = () => {
       <Navbar
         onOpenCreate={() => setIsCreateOpen(true)}
         onOpenGuide={() => setIsGuideOpen(true)}
+        onOpenReferral={() => setIsReferralOpen(true)}
         onHomeClick={() => setSelectedToken(null)}
         onOpenExplorer={(query) => {
           window.open(`https://solscan.io/account/${encodeURIComponent(query || "")}`, "_blank");
@@ -385,6 +397,11 @@ export const App: React.FC = () => {
       <DeployGuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
+      />
+
+      <ReferralModal
+        isOpen={isReferralOpen}
+        onClose={() => setIsReferralOpen(false)}
       />
     </div>
   );
