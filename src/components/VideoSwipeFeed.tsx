@@ -59,7 +59,7 @@ const SlideTradePanel: React.FC<{
     executeTradeAssets,
     notifyTx,
   } = useWallet();
-  const { currentUser, toggleFollowUser, isFollowingUser, creditReferralReward } = useAuth();
+  const { currentUser, toggleFollowUser, isFollowingUser, creditReferralReward, openAuthModal } = useAuth();
 
   const rawCreator = token.creatorHandle || token.creator || token.launcherHandle || "";
   const cleanCreator = rawCreator.replace(/^@/, "").trim();
@@ -125,8 +125,8 @@ const SlideTradePanel: React.FC<{
       setAmountStr(overrideAmount.toString());
     }
 
-    if (!connected) {
-      connect();
+    if (!currentUser || !connected) {
+      openAuthModal(`Connect your Solana wallet to ${isBuy ? "buy" : "sell"} $${token.symbol}.`);
       return;
     }
     if (tradeAmount <= 0 || isSubmitting) return;
@@ -316,6 +316,10 @@ const SlideTradePanel: React.FC<{
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (!currentUser) {
+                            openAuthModal(`Connect your Solana wallet to follow @${cleanCreator}.`);
+                            return;
+                          }
                           toggleFollowUser(cleanCreator);
                         }}
                         style={{

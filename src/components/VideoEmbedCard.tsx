@@ -127,7 +127,7 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   onUpdateToken,
   isActive,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, openAuthModal } = useAuth();
   const { publicKey } = useWallet();
 
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -313,6 +313,10 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
   const hasLiked = currentLikes.includes(userIdentifier);
 
   const handleToggleLike = () => {
+    if (!currentUser) {
+      openAuthModal("Connect your Solana wallet to like videos and memes.");
+      return;
+    }
     if (!onUpdateToken) return;
     const nextLikes = hasLiked
       ? currentLikes.filter((id) => id !== userIdentifier)
@@ -325,6 +329,10 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
 
   const handlePostComment = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      openAuthModal("Connect your Solana wallet to leave comments.");
+      return;
+    }
     if (!commentInput.trim()) return;
 
     const authorName =
@@ -359,6 +367,10 @@ export const VideoEmbedCard: React.FC<VideoEmbedCardProps> = ({
 
   const handleSaveVideo = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      openAuthModal("Connect your Solana wallet to update coin video links.");
+      return;
+    }
     const trimmed = inputUrl.trim();
     if (!trimmed || !onUpdateToken) return;
 

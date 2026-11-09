@@ -9,7 +9,7 @@ interface TokenCardProps {
 }
 
 export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
-  const { currentUser, toggleFollowUser, isFollowingUser } = useAuth();
+  const { currentUser, toggleFollowUser, isFollowingUser, openAuthModal } = useAuth();
   const rawCreator = token.creatorHandle || token.creator || token.launcherHandle || "";
   const cleanCreator = rawCreator.replace(/^@/, "").trim();
   const isSelf = currentUser && cleanCreator.toLowerCase() === currentUser.username.toLowerCase();
@@ -91,6 +91,10 @@ export const TokenCard: React.FC<TokenCardProps> = ({ token, onSelect }) => {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!currentUser) {
+                    openAuthModal(`Connect your Solana wallet to follow @${cleanCreator}.`);
+                    return;
+                  }
                   toggleFollowUser(cleanCreator);
                 }}
                 style={{

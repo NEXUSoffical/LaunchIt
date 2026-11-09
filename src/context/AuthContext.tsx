@@ -30,6 +30,10 @@ interface AuthContextType {
   isFollowingUser: (targetHandleOrWallet: string) => boolean;
   getReferralLink: () => string;
   creditReferralReward: (refCodeOrWallet: string, solAmount: number) => void;
+  isAuthModalOpen: boolean;
+  authModalPrompt: string;
+  openAuthModal: (prompt?: string) => void;
+  closeAuthModal: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -82,6 +86,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalPrompt, setAuthModalPrompt] = useState<string>(
+    "Connect your Solana wallet to trade, like, comment, and launch coins."
+  );
+
+  const openAuthModal = (prompt?: string) => {
+    if (prompt) setAuthModalPrompt(prompt);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+  };
 
   // Sync session across tabs
   useEffect(() => {
@@ -422,6 +439,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFollowingUser,
         getReferralLink,
         creditReferralReward,
+        isAuthModalOpen,
+        authModalPrompt,
+        openAuthModal,
+        closeAuthModal,
       }}
     >
       {children}

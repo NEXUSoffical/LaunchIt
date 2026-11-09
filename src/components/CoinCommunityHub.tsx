@@ -28,7 +28,7 @@ interface CoinCommunityHubProps {
 }
 
 export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, openAuthModal } = useAuth();
   const { userTokens } = useWallet();
 
   const [activeTab, setActiveTab] = useState<"theses" | "chat">("theses");
@@ -159,7 +159,11 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !chatInput.trim()) return;
+    if (!currentUser) {
+      openAuthModal(`Connect your Solana wallet to chat in the $${token.symbol} holder room.`);
+      return;
+    }
+    if (!chatInput.trim()) return;
 
     const newMsg: ChatMessage = {
       id: `chat-${Date.now()}`,
@@ -266,7 +270,13 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
 
         {activeTab === "theses" && (
           <button
-            onClick={() => setIsPostingThesis(!isPostingThesis)}
+            onClick={() => {
+              if (!currentUser) {
+                openAuthModal(`Connect your Solana wallet to post theses for $${token.symbol}.`);
+                return;
+              }
+              setIsPostingThesis(!isPostingThesis);
+            }}
             className="btn-secondary"
             style={{ fontSize: "0.78rem", padding: "6px 12px", border: "1px solid #ff8c37", color: "#ff8c37" }}
           >
@@ -585,40 +595,67 @@ export const CoinCommunityHub: React.FC<CoinCommunityHubProps> = ({ token }) => 
           </div>
 
           {/* Chat input box */}
-          <form
-            onSubmit={handleSendChat}
-            style={{
-              padding: "12px 16px",
-              borderTop: "1px solid var(--border-subtle)",
-              background: "rgba(255, 255, 255, 0.02)",
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-            }}
-          >
-            <input
-              type="text"
-              placeholder={`Chat about $${token.symbol} as @${currentUser?.username || "anon"}...`}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+          {!currentUser ? (
+            <div
               style={{
-                flex: 1,
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "8px",
-                padding: "10px 14px",
-                color: "#fff",
-                fontSize: "0.85rem",
+                padding: "14px 16px",
+                borderTop: "1px solid var(--border-subtle)",
+                background: "rgba(255, 96, 0, 0.05)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
               }}
-            />
-            <button
-              type="submit"
-              className="btn-primary"
-              style={{ padding: "10px 16px", borderRadius: "8px" }}
             >
-              <Send size={15} />
-            </button>
-          </form>
+              <span style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                Connect your wallet to chat with holders and post research theses.
+              </span>
+              <button
+                type="button"
+                onClick={() => openAuthModal(`Connect your Solana wallet to chat in the $${token.symbol} room.`)}
+                className="btn-primary"
+                style={{ padding: "8px 14px", fontSize: "0.8rem", fontWeight: 700 }}
+              >
+                Connect Wallet
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleSendChat}
+              style={{
+                padding: "12px 16px",
+                borderTop: "1px solid var(--border-subtle)",
+                background: "rgba(255, 255, 255, 0.02)",
+                display: "flex",
+                gap: "10px",
+                alignItems: "center",
+              }}
+            >
+              <input
+                type="text"
+                placeholder={`Chat about $${token.symbol} as @${currentUser.username}...`}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                style={{
+                  flex: 1,
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  color: "#fff",
+                  fontSize: "0.85rem",
+                }}
+              />
+              <button
+                type="submit"
+                className="btn-primary"
+                style={{ padding: "10px 16px", borderRadius: "8px" }}
+              >
+                <Send size={15} />
+              </button>
+            </form>
+          )}
         </div>
       )}
     </div>

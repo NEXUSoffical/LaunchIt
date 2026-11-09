@@ -46,9 +46,9 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, updateUserBalance, updateUserTokens, updateUserAssets } = useAuth();
+  const { currentUser, updateUserBalance, updateUserTokens, updateUserAssets, openAuthModal } = useAuth();
 
-  const [connected, setConnected] = useState<boolean>(true);
+  const [connected, setConnected] = useState<boolean>(!!currentUser);
   const [publicKey, setPublicKey] = useState<string | null>(
     currentUser?.solanaWallet || null
   );
@@ -131,6 +131,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       fetchRealBalance();
       const balInterval = setInterval(fetchRealBalance, 8000);
       return () => clearInterval(balInterval);
+    } else {
+      setPublicKey(null);
+      setBalance(0.0);
+      setConnected(false);
+      setUserTokens({});
     }
   }, [currentUser?.solanaWallet, network]);
 
@@ -165,6 +170,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (currentUser) {
       setPublicKey(currentUser.solanaWallet);
       setConnected(true);
+    } else {
+      openAuthModal("Connect your Solana wallet to trade, like, comment, and launch coins.");
     }
   };
 

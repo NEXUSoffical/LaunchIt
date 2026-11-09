@@ -16,6 +16,7 @@ import {
   X,
   Gift,
   Users,
+  Wallet,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -33,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onHomeClick,
   onOpenReferral,
 }) => {
-  const { currentUser, logout, updateProfile } = useAuth();
+  const { currentUser, logout, updateProfile, openAuthModal } = useAuth();
   const {
     publicKey,
     balance,
@@ -583,69 +584,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           ) : (
-            /* Guest / In-App Solana Wallet Pill */
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div
-                onClick={handleCopyAddr}
-                title="Click to copy your Solana Address"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  background: "var(--bg-surface-elevated)",
-                  border: airdropSuccess
-                    ? "1.5px solid #10b981"
-                    : "1px solid rgba(255, 96, 0, 0.4)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "6px 12px",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                  boxShadow: airdropSuccess ? "0 0 20px rgba(16, 185, 129, 0.5)" : "none",
-                }}
-              >
-                <div
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #14f195 0%, #9945ff 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "0.85rem",
-                    boxShadow: "0 0 10px rgba(20, 241, 149, 0.4)",
-                  }}
-                >
-                  ◎
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: "0.73rem", fontWeight: 700, color: "#94a3b8", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span>{shortAddr || "Not Connected"}</span>
-                    {copiedAddr ? <Check size={12} color="#10b981" /> : <Copy size={11} color="#64748b" />}
-                  </div>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: "0.82rem",
-                      color: airdropSuccess ? "#10b981" : "var(--solana-green)",
-                      fontWeight: 800,
-                      transition: "color 0.3s ease",
-                    }}
-                  >
-                    {balance.toFixed(2)} SOL
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={connect}
-                className="btn-secondary"
-                style={{ padding: "6px 10px", fontSize: "0.76rem", borderColor: "rgba(255, 255, 255, 0.18)" }}
-              >
-                <User size={13} color="#cbd5e1" />
-                <span>Connect Wallet</span>
-              </button>
-            </div>
+            /* Unauthenticated / Guest View: Direct Connect Wallet Button */
+            <button
+              onClick={() => openAuthModal("Connect your Solana wallet to sign in, trade, like, comment, and launch coins.")}
+              className="btn-primary"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                fontSize: "0.85rem",
+                fontWeight: 800,
+                boxShadow: "0 4px 16px rgba(255, 96, 0, 0.35)",
+              }}
+            >
+              <Wallet size={15} />
+              <span>Connect Wallet</span>
+            </button>
           )}
         </div>
       </div>

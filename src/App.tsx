@@ -8,6 +8,7 @@ import { TradingTerminal } from "./components/TradingTerminal";
 import { CreateTokenModal } from "./components/CreateTokenModal";
 import { DeployGuideModal } from "./components/DeployGuideModal";
 import { ReferralModal } from "./components/ReferralModal";
+import { ConnectWalletModal } from "./components/ConnectWalletModal";
 import { LandingHomePage } from "./components/LandingHomePage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAuth } from "./context/AuthContext";
@@ -172,7 +173,7 @@ const parseInitialState = (): { initialTokens: Token[]; initialSelected: Token |
 const parsedState = parseInitialState();
 
 export const App: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { currentUser, openAuthModal } = useAuth();
   const [tokens, setTokens] = useState<Token[]>(parsedState.initialTokens);
   const [trades, setTrades] = useState<Trade[]>(() => {
     try {
@@ -322,16 +323,24 @@ export const App: React.FC = () => {
     syncAddTrade(newTrade, updatedToken);
   };
 
-  if (!isAuthenticated) {
-    return <LandingHomePage previewTokens={tokens} />;
-  }
-
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <Navbar
-        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenCreate={() => {
+          if (!currentUser) {
+            openAuthModal("Connect your Solana wallet to launch a coin.");
+          } else {
+            setIsCreateOpen(true);
+          }
+        }}
         onOpenGuide={() => setIsGuideOpen(true)}
-        onOpenReferral={() => setIsReferralOpen(true)}
+        onOpenReferral={() => {
+          if (!currentUser) {
+            openAuthModal("Connect your Solana wallet to view your referral dashboard & rewards.");
+          } else {
+            setIsReferralOpen(true);
+          }
+        }}
         onHomeClick={() => setSelectedToken(null)}
         onOpenExplorer={(query) => {
           window.open(`https://solscan.io/account/${encodeURIComponent(query || "")}`, "_blank");
@@ -403,6 +412,8 @@ export const App: React.FC = () => {
         isOpen={isReferralOpen}
         onClose={() => setIsReferralOpen(false)}
       />
+
+      <ConnectWalletModal />
     </div>
   );
 };

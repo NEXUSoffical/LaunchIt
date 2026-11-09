@@ -16,7 +16,7 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
   onTradeExecuted,
 }) => {
   const { balance, network, userTokens, executeTradeAssets, notifyTx, publicKey } = useWallet();
-  const { currentUser, creditReferralReward } = useAuth();
+  const { currentUser, creditReferralReward, openAuthModal } = useAuth();
 
   const getReferrerWallet = (): string | null => {
     if (!currentUser?.referredBy) return null;
@@ -84,6 +84,10 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
   }, [tokenAmount, token.realSolReserves, token.realTokenReserves, isTokenGraduated, userTokenBalance, token.priceSol]);
 
   const handleSwap = async () => {
+    if (!currentUser) {
+      openAuthModal(`Connect your Solana wallet to ${mode === "buy" ? "buy" : "sell"} $${token.symbol}.`);
+      return;
+    }
     setStatusMsg(null);
     setIsSwapping(true);
 
@@ -670,21 +674,24 @@ export const SwapWidget: React.FC<SwapWidgetProps> = ({
       {/* Action Button */}
       <button
         onClick={handleSwap}
-        disabled={isSwapping || (mode === "sell" && userTokenBalance <= 0)}
-        className={mode === "buy" ? "btn-buy" : "btn-sell"}
+        disabled={isSwapping || (Boolean(currentUser) && mode === "sell" && userTokenBalance <= 0)}
+        className={!currentUser ? "btn-primary" : mode === "buy" ? "btn-buy" : "btn-sell"}
         style={{
           width: "100%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           gap: "8px",
-          opacity: mode === "sell" && userTokenBalance <= 0 ? 0.5 : 1,
-          cursor: mode === "sell" && userTokenBalance <= 0 ? "not-allowed" : "pointer",
+          opacity: currentUser && mode === "sell" && userTokenBalance <= 0 ? 0.5 : 1,
+          cursor: currentUser && mode === "sell" && userTokenBalance <= 0 ? "not-allowed" : "pointer",
+          ...(currentUser ? {} : { padding: "14px", fontSize: "0.95rem", fontWeight: 800 }),
         }}
       >
         <Zap size={18} />
         <span>
-          {isSwapping
+          {!currentUser
+            ? `Connect Wallet to Trade $${token.symbol}`
+            : isSwapping
             ? "Executing Trade..."
             : mode === "buy"
             ? `Buy $${token.symbol}`
